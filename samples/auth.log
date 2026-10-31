@@ -1,0 +1,12 @@
+Oct 29 09:00:12 ubuntu-lab sshd[2101]: Accepted password for alice from 192.168.1.20 port 52010 ssh2
+Oct 29 09:00:12 ubuntu-lab sshd[2101]: pam_unix(sshd:session): session opened for user alice(uid=1000) by (uid=0)
+Oct 29 09:05:10 ubuntu-lab sudo: alice : TTY=pts/0 ; PWD=/home/alice ; USER=root ; COMMAND=/usr/bin/apt update
+Oct 29 10:15:01 ubuntu-lab sshd[2201]: Failed password for bob from 203.0.113.42 port 60101 ssh2
+Oct 29 10:15:18 ubuntu-lab sshd[2202]: Failed password for bob from 203.0.113.42 port 60102 ssh2
+Oct 29 10:15:36 ubuntu-lab sshd[2203]: Failed password for bob from 203.0.113.42 port 60103 ssh2
+Oct 29 10:15:52 ubuntu-lab sshd[2204]: Failed password for bob from 203.0.113.42 port 60104 ssh2
+Oct 29 10:16:09 ubuntu-lab sshd[2205]: Failed password for bob from 203.0.113.42 port 60105 ssh2
+Oct 29 10:16:27 ubuntu-lab sshd[2206]: Accepted password for bob from 203.0.113.42 port 60106 ssh2
+Oct 29 10:20:01 ubuntu-lab sshd[2301]: Invalid user admin from 198.51.100.23 port 61000
+Oct 29 10:20:02 ubuntu-lab sshd[2301]: Failed password for invalid user admin from 198.51.100.23 port 61000 ssh2
+Oct 29 23:45:10 ubuntu-lab sshd[2401]: Accepted password for alice from 198.51.100.77 port 62000 ssh2

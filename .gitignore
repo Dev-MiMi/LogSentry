@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+*.swp
+.coverage
+# Reports may contain sensitive authentication evidence.
+reports/
+# Local databases will be introduced with the Django application.
+*.sqlite3
