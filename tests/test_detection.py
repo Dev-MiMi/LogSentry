@@ -1,4 +1,4 @@
-"""Verify repeated failures and timed bursts with positive and negative examples."""
+"""Verify authentication rules with activity that should and should not alert."""
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -7,7 +7,11 @@ import unittest
 
 from logsentry.config import DetectionSettings
 from logsentry.data import LogEvent
-from logsentry.detection import detect_brute_force_attacks, detect_repeated_failed_logins
+from logsentry.detection import (
+    detect_brute_force_attacks,
+    detect_repeated_failed_logins,
+    detect_suspicious_logins,
+)
 from logsentry.parser import parse_lines, read_system_logs
 
 
@@ -266,6 +270,162 @@ class BruteForceTests(unittest.TestCase):
         parsed = parse_lines(lines, self.settings)
         self.assertEqual(len(parsed.issues), 1)
         self.assertEqual(detect_brute_force_attacks(parsed.events, self.settings), [])
+
+
+class SuspiciousLoginTests(unittest.TestCase):
+    def setUp(self):
+        self.settings = DetectionSettings(year=2026)
+
+    def success(self, hour=10, minute=0, second=0, **changes):
+        event = LogEvent(
+            timestamp=datetime(2026, 10, 29, hour, minute, second, tzinfo=timezone.utc),
+            hostname="ubuntu-lab", event_type="successful_login",
+            line_number=1, raw_line="sample successful login",
+            username="alice", source_ip="192.168.1.20", authentication_method="password",
+        )
+        return replace(event, **changes)
+
+    def test_sample_flags_two_successes_with_their_specific_reasons(self):
+        parsed = read_system_logs(ROOT / "samples/auth.log", self.settings)
+        alerts = detect_suspicious_logins(parsed.events, self.settings)
+        self.assertEqual(len(alerts), 2)
+        bob, alice = alerts
+        self.assertEqual(bob.severity, "Medium")
+        self.assertEqual(bob.source_ip, "203.0.113.42")
+        self.assertEqual(bob.usernames, ("bob",))
+        self.assertNotIn("outside configured hours", bob.description)
+        self.assertIn("outside configured trusted networks", bob.description)
+        self.assertIs(bob.evidence[0], parsed.events[8])
+        self.assertEqual(alice.severity, "High")
+        self.assertEqual(alice.rule, "suspicious_login")
+        self.assertEqual(alice.source_ip, "198.51.100.77")
+        self.assertIn("23:45:10", alice.description)
+        self.assertIn("outside configured hours", alice.description)
+        self.assertIn("outside configured trusted networks", alice.description)
+        self.assertIs(alice.evidence[0], parsed.events[11])
+
+    def test_trusted_daytime_and_empty_input_do_not_alert(self):
+        self.assertEqual(detect_suspicious_logins([], self.settings), [])
+        self.assertEqual(detect_suspicious_logins([self.success()], self.settings), [])
+
+    def test_one_reason_is_medium_and_both_reasons_are_high(self):
+        for hour, source, severity, time_reason, ip_reason in (
+            (23, "192.168.1.20", "Medium", True, False),
+            (10, "203.0.113.42", "Medium", False, True),
+            (23, "203.0.113.42", "High", True, True),
+        ):
+            with self.subTest(hour=hour, source=source):
+                alert = detect_suspicious_logins([self.success(hour, source_ip=source)], self.settings)[0]
+                self.assertEqual(alert.severity, severity)
+                self.assertEqual("outside configured hours" in alert.description, time_reason)
+                self.assertEqual("outside configured trusted networks" in alert.description, ip_reason)
+
+    def test_normal_hours_start_inclusive_and_end_exclusive(self):
+        for hour, minute, second, should_alert in (
+            (5, 59, 59, True), (6, 0, 0, False),
+            (21, 59, 59, False), (22, 0, 0, True),
+        ):
+            with self.subTest(time=(hour, minute, second)):
+                alerts = detect_suspicious_logins([self.success(hour, minute, second)], self.settings)
+                self.assertEqual(bool(alerts), should_alert)
+
+    def test_configured_local_hour_is_used_in_both_directions(self):
+        settings = replace(self.settings, timezone_name="Africa/Lagos")
+        # 05:00 UTC is 06:00 local, inside working hours.
+        self.assertEqual(detect_suspicious_logins([self.success(5)], settings), [])
+        # 21:00 UTC is 22:00 local, outside working hours.
+        alert = detect_suspicious_logins([self.success(21)], settings)[0]
+        self.assertEqual(alert.severity, "Medium")
+        self.assertIn("22:00:00+01:00", alert.description)
+        self.assertIn("Africa/Lagos", alert.description)
+        self.assertEqual(alert.timestamp.hour, 21)  # Evidence remains in UTC.
+
+    def test_timezone_conversion_handles_local_date_rollover(self):
+        settings = replace(self.settings, timezone_name="Africa/Lagos")
+        alert = detect_suspicious_logins([self.success(23, 30)], settings)[0]
+        self.assertIn("2026-10-30T00:30:00+01:00", alert.description)
+        self.assertEqual(alert.timestamp.day, 29)
+
+    def test_timezone_offset_changes_are_used_for_working_hours(self):
+        settings = replace(self.settings, timezone_name="America/New_York")
+        # July uses UTC-4, January uses UTC-5. At 10:00 UTC only July is 06:00.
+        summer = self.success(timestamp=datetime(2026, 7, 1, 10, tzinfo=timezone.utc))
+        winter = self.success(timestamp=datetime(2026, 1, 1, 10, tzinfo=timezone.utc))
+        self.assertEqual(detect_suspicious_logins([summer], settings), [])
+        alert = detect_suspicious_logins([winter], settings)[0]
+        self.assertIn("05:00:00-05:00", alert.description)
+
+    def test_night_shift_and_full_day_settings(self):
+        night_shift = replace(self.settings, normal_start_hour=22, normal_end_hour=6)
+        for hour, should_alert in ((22, False), (23, False), (5, False), (6, True), (12, True)):
+            with self.subTest(hour=hour):
+                self.assertEqual(bool(detect_suspicious_logins([self.success(hour)], night_shift)), should_alert)
+        all_day = replace(self.settings, normal_start_hour=0, normal_end_hour=24)
+        for hour in (0, 5, 23):
+            self.assertEqual(detect_suspicious_logins([self.success(hour)], all_day), [])
+
+    def test_membership_uses_network_not_private_flag_or_prefix(self):
+        for source, should_alert in (
+            ("192.168.1.1", False), ("192.168.1.254", False),
+            ("192.168.10.20", True), ("192.168.2.20", True),
+            ("10.0.0.20", True), ("172.16.1.20", True),
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(bool(detect_suspicious_logins([self.success(source_ip=source)], self.settings)), should_alert)
+
+    def test_public_network_can_be_explicitly_trusted_and_empty_allowlist_flags_all(self):
+        event = self.success(source_ip="203.0.113.42")
+        settings = replace(self.settings, trusted_networks=("203.0.113.0/24",))
+        self.assertEqual(detect_suspicious_logins([event], settings), [])
+        settings = replace(self.settings, trusted_networks=())
+        self.assertEqual(detect_suspicious_logins([self.success()], settings)[0].severity, "Medium")
+
+    def test_ipv6_and_mixed_network_families(self):
+        settings = replace(self.settings, trusted_networks=("192.168.1.0/24", "2001:db8:1::/64"))
+        self.assertEqual(detect_suspicious_logins([self.success(source_ip="2001:db8:1::20")], settings), [])
+        self.assertEqual(detect_suspicious_logins([self.success()], settings), [])
+        event = self.success(source_ip="2001:db8:2::20")
+        self.assertEqual(detect_suspicious_logins([event], settings)[0].severity, "Medium")
+        ipv6_only = replace(self.settings, trusted_networks=("2001:db8:1::/64",))
+        self.assertEqual(detect_suspicious_logins([self.success()], ipv6_only)[0].severity, "Medium")
+
+    def test_ipv4_mapped_ipv6_uses_same_ipv4_trust_policy(self):
+        event = self.success(source_ip="::ffff:192.168.1.20")
+        self.assertEqual(detect_suspicious_logins([event], self.settings), [])
+        event = self.success(source_ip="::ffff:203.0.113.42")
+        self.assertEqual(detect_suspicious_logins([event], self.settings)[0].source_ip, "203.0.113.42")
+
+    def test_failures_invalid_user_other_events_and_missing_source_are_skipped(self):
+        events = [self.success(23, source_ip="203.0.113.42", event_type=kind)
+                  for kind in ("failed_login", "invalid_user", "other")]
+        events.append(self.success(23, source_ip=None))
+        self.assertEqual(detect_suspicious_logins(events, self.settings), [])
+
+    def test_password_and_publickey_successes_are_both_checked(self):
+        events = [self.success(23, authentication_method=method, line_number=number)
+                  for number, method in enumerate(("password", "publickey"), start=1)]
+        alerts = detect_suspicious_logins(events, self.settings)
+        self.assertEqual(len(alerts), 2)
+        self.assertTrue(all(alert.severity == "Medium" for alert in alerts))
+
+    def test_each_flagged_event_has_own_evidence_and_stable_order_without_mutation(self):
+        earlier = self.success(22, line_number=3)
+        later = self.success(23, line_number=5)
+        another = self.success(23, line_number=4)
+        events = [later, earlier, another]
+        original = list(events)
+        alerts = detect_suspicious_logins(iter(events), self.settings)
+        self.assertEqual([alert.evidence for alert in alerts], [(earlier,), (another,), (later,)])
+        self.assertEqual(events, original)
+        self.assertEqual(alerts, detect_suspicious_logins(reversed(events), self.settings))
+
+    def test_malformed_success_is_reported_by_parser_instead_of_becoming_an_alert(self):
+        parsed = parse_lines([
+            "Oct 29 23:45:10 ubuntu-lab sshd[1]: "
+            "Accepted password for alice from not-an-ip port 62000 ssh2\n",
+        ], self.settings)
+        self.assertEqual(len(parsed.issues), 1)
+        self.assertEqual(detect_suspicious_logins(parsed.events, self.settings), [])
 
 
 if __name__ == "__main__":

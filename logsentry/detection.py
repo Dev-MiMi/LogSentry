@@ -1,11 +1,13 @@
 """Detection rules examine parsed facts and return alerts for investigation.
 
-This module currently implements Features 4 and 5. Other rules will be added one at
+This module currently implements Features 4, 5, and 6. Other rules will be added one at
 a time. Importing it does not read files or run the detectors automatically.
 """
 
 from collections import defaultdict
+from ipaddress import ip_address, ip_network
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 from .config import DetectionSettings
 from .data import Alert, LogEvent
@@ -67,6 +69,67 @@ def detect_repeated_failed_logins(
     # Return a predictable order for tests and the eventual dashboard.
     return sorted(alerts, key=lambda alert: (
         alert.timestamp, alert.hostname, alert.source_ip
+    ))
+
+
+# FEATURE 6: Identify successful logins at unusual times or from untrusted IPs.
+def detect_suspicious_logins(
+    events: Iterable[LogEvent], settings: DetectionSettings
+) -> list[Alert]:
+    """Return one alert for each successful login outside the configured policy.
+
+    Hours are checked in the configured local timezone. Networks are an explicit
+    allowlist, not a reputation database: an address outside them is unexpected
+    under this policy, not necessarily malicious. The caller supplies parsed
+    events with validated IPs. Missing source IPs cannot be assessed by this rule.
+    """
+    # Parse the policy once per call, rather than once per event.
+    local_zone = ZoneInfo(settings.timezone_name)
+    trusted_networks = tuple(ip_network(network) for network in settings.trusted_networks)
+    alerts = []
+
+    for event in events:
+        if event.event_type != "successful_login" or not event.source_ip:
+            continue
+
+        # FEATURE 1 stores UTC; FEATURE 6 evaluates the machine's local hours.
+        # astimezone handles changes in UTC offset, including daylight saving.
+        local_time = event.timestamp.astimezone(local_zone)
+        reasons = []
+        if not settings.is_normal_login_hour(local_time.hour):
+            reasons.append(
+                f"login at {local_time.isoformat()} ({settings.timezone_name}) "
+                f"was outside configured hours "
+                f"{settings.normal_start_hour:02d}:00-{settings.normal_end_hour:02d}:00"
+            )
+
+        # Use real network membership, not a string-prefix check. A mapped IPv6
+        # source represents its IPv4 address, just as in our parser.
+        address = ip_address(event.source_ip)
+        address = getattr(address, "ipv4_mapped", None) or address
+        trusted = any(
+            address.version == network.version and address in network
+            for network in trusted_networks
+        )
+        if not trusted:
+            reasons.append(f"source IP {address} was outside configured trusted networks")
+
+        if not reasons:
+            continue
+
+        alerts.append(Alert(
+            rule="suspicious_login",
+            # FEATURE 7: Both reasons together receive a higher priority.
+            severity="High" if len(reasons) == 2 else "Medium",
+            hostname=event.hostname,
+            source_ip=str(address),
+            usernames=(event.username,) if event.username is not None else (),
+            description="Successful login flagged: " + "; ".join(reasons) + ".",
+            evidence=(event,),
+        ))
+
+    return sorted(alerts, key=lambda alert: (
+        alert.timestamp, alert.hostname, alert.source_ip, alert.evidence[0].line_number
     ))
 
 
