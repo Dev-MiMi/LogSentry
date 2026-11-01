@@ -60,9 +60,9 @@ The description says the five failures were observed across the imported log.
 ## Limits of this rule
 
 This count has no time window. Three failures over three days still produce a
-repeated-failure finding. Feature 5 will separately determine whether attempts
-form a burst within five minutes. This module currently implements only the
-repeated-failure rule, plus its initial Medium priority.
+repeated-failure finding. Feature 5 separately determines whether attempts
+form a burst within five minutes. See [the brute-force walkthrough](brute_force.md)
+for that rule and its High priority.
 
 The input may be incomplete: malformed lines remain in `parsed.issues` and
 are not counted. A dashboard must show those issues along with any findings.
