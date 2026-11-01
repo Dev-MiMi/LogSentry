@@ -9,7 +9,10 @@ from logsentry.config import DetectionSettings
 from logsentry.data import LogEvent
 from logsentry.detection import (
     detect_brute_force_attacks,
+    detect_invalid_user_attempts,
     detect_repeated_failed_logins,
+    detect_success_after_failures,
+    detect_suspicious_events,
     detect_suspicious_logins,
 )
 from logsentry.parser import parse_lines, read_system_logs
@@ -426,6 +429,201 @@ class SuspiciousLoginTests(unittest.TestCase):
         ], self.settings)
         self.assertEqual(len(parsed.issues), 1)
         self.assertEqual(detect_suspicious_logins(parsed.events, self.settings), [])
+
+
+class SuspiciousEventTests(unittest.TestCase):
+    def setUp(self):
+        self.settings = DetectionSettings(year=2026)
+        self.base_time = datetime(2026, 10, 29, 10, tzinfo=timezone.utc)
+
+    def event(self, seconds, event_type="failed_login", **changes):
+        event = LogEvent(
+            timestamp=self.base_time + timedelta(seconds=seconds),
+            hostname="ubuntu-lab", event_type=event_type,
+            line_number=seconds + 1, raw_line=f"{event_type} at {seconds}",
+            username="bob", source_ip="203.0.113.42", authentication_method="password",
+        )
+        return replace(event, **changes)
+
+    def sequence(self):
+        return [self.event(0), self.event(10), self.event(20),
+                self.event(30, "successful_login")]
+
+    def test_sample_yields_account_success_and_one_invalid_user_finding(self):
+        parsed = read_system_logs(ROOT / "samples/auth.log", self.settings)
+        alerts = detect_suspicious_events(parsed.events, self.settings)
+        self.assertEqual(len(alerts), 2)
+        success, invalid = alerts
+        self.assertEqual(success.rule, "success_after_failures")
+        self.assertEqual(success.severity, "High")
+        self.assertEqual(success.usernames, ("bob",))
+        self.assertEqual(success.hostname, "ubuntu-lab")
+        self.assertEqual(success.source_ip, "203.0.113.42")
+        self.assertEqual([event.line_number for event in success.evidence], [4, 5, 6, 7, 8, 9])
+        self.assertIs(success.evidence[-1], parsed.events[8])
+        self.assertIn("5 failed logins", success.description)
+        self.assertIn("requires investigation", success.description)
+        self.assertEqual(invalid.rule, "invalid_user")
+        self.assertEqual(invalid.severity, "Medium")
+        self.assertEqual(invalid.usernames, ("admin",))
+        self.assertEqual([event.line_number for event in invalid.evidence], [10, 11])
+
+    def test_empty_and_fewer_failures_do_not_flag_success(self):
+        self.assertEqual(detect_suspicious_events([], self.settings), [])
+        for count in range(3):
+            with self.subTest(count=count):
+                events = [self.event(number) for number in range(count)]
+                events.append(self.event(10, "successful_login"))
+                self.assertEqual(detect_success_after_failures(events, self.settings), [])
+
+    def test_all_three_identity_fields_must_match(self):
+        for changes in ({"username": "alice"}, {"hostname": "other-host"},
+                        {"source_ip": "198.51.100.23"}):
+            with self.subTest(changes=changes):
+                events = self.sequence()
+                events[-1] = replace(events[-1], **changes)
+                self.assertEqual(detect_success_after_failures(events, self.settings), [])
+
+    def test_unrelated_failures_cannot_complete_threshold(self):
+        for changes in ({"username": "alice"}, {"hostname": "other-host"},
+                        {"source_ip": "198.51.100.23"}):
+            with self.subTest(changes=changes):
+                events = self.sequence()
+                events[0] = replace(events[0], **changes)
+                self.assertEqual(detect_success_after_failures(events, self.settings), [])
+
+    def test_failure_at_exact_ten_minutes_is_included_but_one_second_older_is_not(self):
+        events = [self.event(0), self.event(10), self.event(20),
+                  self.event(600, "successful_login")]
+        self.assertEqual(len(detect_success_after_failures(events, self.settings)), 1)
+        events[-1] = self.event(601, "successful_login")
+        self.assertEqual(detect_success_after_failures(events, self.settings), [])
+
+    def test_expired_failure_is_excluded_from_evidence(self):
+        events = [self.event(0), self.event(610), self.event(620), self.event(630),
+                  self.event(640, "successful_login")]
+        alert = detect_success_after_failures(events, self.settings)[0]
+        self.assertEqual(alert.evidence, tuple(events[1:]))
+        self.assertIn("3 failed logins", alert.description)
+
+    def test_custom_threshold_and_window_control_correlation(self):
+        settings = replace(self.settings, repeated_threshold=2,
+                           success_after_failures_window=timedelta(seconds=10))
+        events = [self.event(0), self.event(5), self.event(10, "successful_login")]
+        self.assertEqual(len(detect_success_after_failures(events, settings)), 1)
+        self.assertEqual(detect_success_after_failures(events, self.settings), [])
+        events[-1] = self.event(11, "successful_login")
+        self.assertEqual(detect_success_after_failures(events, settings), [])
+
+    def test_success_clears_old_failures_before_next_success(self):
+        events = self.sequence() + [self.event(40, "successful_login")]
+        alerts = detect_success_after_failures(events, self.settings)
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0].timestamp, self.base_time + timedelta(seconds=30))
+
+    def test_success_below_threshold_also_clears_history(self):
+        events = [self.event(0), self.event(10), self.event(20, "successful_login"),
+                  self.event(30), self.event(40, "successful_login")]
+        self.assertEqual(detect_success_after_failures(events, self.settings), [])
+
+    def test_success_only_clears_matching_account_history(self):
+        events = self.sequence()[:-1] + [
+            self.event(25, "successful_login", username="alice"),
+            self.event(30, "successful_login"),
+        ]
+        alerts = detect_success_after_failures(events, self.settings)
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0].usernames, ("bob",))
+
+    def test_new_failure_sequence_after_success_can_alert_again(self):
+        events = self.sequence() + [self.event(40), self.event(50), self.event(60),
+                                  self.event(70, "successful_login")]
+        alerts = detect_success_after_failures(events, self.settings)
+        self.assertEqual(len(alerts), 2)
+        self.assertEqual(alerts[0].evidence, tuple(events[:4]))
+        self.assertEqual(alerts[1].evidence, tuple(events[4:]))
+
+    def test_future_failures_are_not_correlated_to_earlier_success(self):
+        events = [self.event(0, "successful_login"), self.event(1), self.event(2), self.event(3)]
+        self.assertEqual(detect_success_after_failures(events, self.settings), [])
+
+    def test_same_timestamp_uses_line_order_before_correlating(self):
+        failures = [self.event(0, line_number=number) for number in (1, 2, 3)]
+        success = self.event(0, "successful_login", line_number=4)
+        self.assertEqual(len(detect_success_after_failures([success] + failures, self.settings)), 1)
+        earlier_success = replace(success, line_number=0)
+        self.assertEqual(detect_success_after_failures(failures + [earlier_success], self.settings), [])
+
+    def test_out_of_order_records_and_generators_work_without_mutation(self):
+        events = self.sequence()
+        unordered = [events[3], events[1], events[0], events[2]]
+        original = list(unordered)
+        alerts = detect_suspicious_events(iter(unordered), self.settings)
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0].evidence, tuple(events))
+        self.assertEqual(unordered, original)
+
+    def test_invalid_accounts_and_non_failure_records_cannot_establish_correlation(self):
+        for changes in ({"invalid_user": True}, {"event_type": "invalid_user"},
+                        {"event_type": "other"}, {"source_ip": None}, {"username": None}):
+            with self.subTest(changes=changes):
+                events = self.sequence()
+                events[0] = replace(events[0], **changes)
+                self.assertEqual(detect_success_after_failures(events, self.settings), [])
+
+    def test_publickey_success_can_follow_password_failures(self):
+        events = self.sequence()
+        events[-1] = replace(events[-1], authentication_method="publickey")
+        alert = detect_success_after_failures(events, self.settings)[0]
+        self.assertEqual(alert.severity, "High")
+        self.assertIn("requires investigation", alert.description)
+        self.assertEqual(alert.evidence[-1].authentication_method, "publickey")
+
+    def test_invalid_user_notice_and_password_record_form_one_finding(self):
+        events = [self.event(0, "invalid_user", username="admin", invalid_user=True),
+                  self.event(1, username="admin", invalid_user=True)]
+        alerts = detect_invalid_user_attempts(reversed(events))
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0].evidence, tuple(events))
+        self.assertIn("same attempt", alerts[0].description)
+
+    def test_invalid_user_failure_alone_is_detected(self):
+        event = self.event(0, username="admin", invalid_user=True)
+        alerts = detect_invalid_user_attempts([event])
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0].evidence, (event,))
+
+    def test_invalid_user_groups_keep_accounts_hosts_and_ips_separate(self):
+        original = self.event(0, "invalid_user", username="admin", invalid_user=True)
+        events = [original, replace(original, hostname="other-host"),
+                  replace(original, username="guest"), replace(original, source_ip="198.51.100.23")]
+        alerts = detect_invalid_user_attempts(events)
+        self.assertEqual(len(alerts), 4)
+        self.assertEqual(alerts, detect_invalid_user_attempts(reversed(events)))
+
+    def test_valid_failures_missing_fields_and_other_records_do_not_flag_invalid_users(self):
+        events = [self.event(0), self.event(1, "successful_login"),
+                  self.event(2, "other", invalid_user=True),
+                  self.event(3, "invalid_user", source_ip=None),
+                  self.event(4, "invalid_user", username=None)]
+        self.assertEqual(detect_invalid_user_attempts(events), [])
+
+    def test_combined_detector_runs_both_rules_on_one_use_iterator(self):
+        events = self.sequence() + [self.event(40, "invalid_user", username="admin", invalid_user=True)]
+        alerts = detect_suspicious_events(iter(events), self.settings)
+        self.assertEqual([alert.rule for alert in alerts], ["success_after_failures", "invalid_user"])
+        self.assertEqual(alerts, detect_suspicious_events(reversed(events), self.settings))
+
+    def test_malformed_records_cannot_create_account_success_finding(self):
+        prefix = "Oct 29 10:15:01 ubuntu-lab sshd[1]: "
+        parsed = parse_lines([
+            prefix + "Failed password for bob from 203.0.113.42 port 60101 ssh2\n",
+            prefix + "Failed password for bob from 203.0.113.42 port 60101 ssh2\n",
+            prefix + "Failed password for bob\n",
+            prefix + "Accepted password for bob from 203.0.113.42 port 60101 ssh2\n",
+        ], self.settings)
+        self.assertEqual(len(parsed.issues), 1)
+        self.assertEqual(detect_suspicious_events(parsed.events, self.settings), [])
 
 
 if __name__ == "__main__":

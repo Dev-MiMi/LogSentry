@@ -1,16 +1,136 @@
 """Detection rules examine parsed facts and return alerts for investigation.
 
-This module currently implements Features 4, 5, and 6. Other rules will be added one at
-a time. Importing it does not read files or run the detectors automatically.
+This module implements Features 2, 4, 5, and 6, with initial severity choices
+for Feature 7. Importing it does not read files or run detectors automatically.
 """
 
-from collections import defaultdict
+from collections import defaultdict, deque
 from ipaddress import ip_address, ip_network
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
 from .config import DetectionSettings
 from .data import Alert, LogEvent
+
+
+# FEATURE 2: Group records targeting invalid account names.
+def detect_invalid_user_attempts(events: Iterable[LogEvent]) -> list[Alert]:
+    """Return one finding per host/IP/invalid username in this imported log.
+
+    SSH may emit an invalid-user notice AND a failed-password record for one
+    attempt. Both are evidence for one finding; their count is not an attempt
+    count. Failed-login records can also reveal an invalid user on their own.
+    """
+    records_by_account: dict[tuple[str, str, str], list[LogEvent]] = defaultdict(list)
+    for event in events:
+        targets_invalid_user = (
+            event.event_type == "invalid_user"
+            or (event.event_type == "failed_login" and event.invalid_user)
+        )
+        if not targets_invalid_user or not event.source_ip or not event.username:
+            continue
+        key = (event.hostname, event.source_ip, event.username)
+        records_by_account[key].append(event)
+
+    alerts = []
+    for (hostname, source_ip, username), records in records_by_account.items():
+        evidence = tuple(sorted(records, key=lambda event: (event.timestamp, event.line_number)))
+        alerts.append(Alert(
+            rule="invalid_user",
+            # FEATURE 7: Invalid accounts warrant review, but may be typos.
+            severity="Medium",
+            hostname=hostname,
+            source_ip=source_ip,
+            usernames=(username,),
+            description=(
+                f"Authentication records from {source_ip} on {hostname} "
+                f"targeted invalid username '{username}'. "
+                "The records may describe more than one stage of the same attempt."
+            ),
+            evidence=evidence,
+        ))
+
+    return sorted(alerts, key=lambda alert: (
+        alert.timestamp, alert.hostname, alert.source_ip, alert.usernames
+    ))
+
+
+# FEATURE 2: Correlate a successful login with that account's recent failures.
+def detect_success_after_failures(
+    events: Iterable[LogEvent], settings: DetectionSettings
+) -> list[Alert]:
+    """Find successes after repeated failures of the same host/IP/account.
+
+    The default requires three valid-account failures in the preceding ten
+    minutes, including exactly ten minutes. Every success resets that key's
+    history, even if it did not reach the threshold. Invalid-user failures
+    cannot establish that an existing account's credentials were guessed.
+    """
+    # A deque is a queue: append adds the latest failure; popleft removes the
+    # oldest one efficiently when it falls outside our time window.
+    failures_by_account: dict[tuple[str, str, str], deque[LogEvent]] = defaultdict(deque)
+    ordered = sorted(events, key=lambda event: (
+        event.timestamp, event.line_number, event.hostname, event.source_ip or "",
+        event.username or "", event.event_type,
+    ))
+    alerts = []
+    for event in ordered:
+        if event.event_type not in {"failed_login", "successful_login"}:
+            continue
+        if not event.source_ip or not event.username or event.invalid_user:
+            continue
+
+        # Matching all three values avoids combining unrelated accounts,
+        # source addresses, or target machines into a compromise suspicion.
+        key = (event.hostname, event.source_ip, event.username)
+        recent = failures_by_account[key]
+        while recent and event.timestamp - recent[0].timestamp > settings.success_after_failures_window:
+            recent.popleft()
+
+        if event.event_type == "failed_login":
+            recent.append(event)
+            continue
+
+        if len(recent) >= settings.repeated_threshold:
+            alerts.append(Alert(
+                rule="success_after_failures",
+                # FEATURE 7: High signals a need to investigate. These logs
+                # alone do not confirm that an attacker gained access.
+                severity="High",
+                hostname=event.hostname,
+                source_ip=event.source_ip,
+                usernames=(event.username,),
+                description=(
+                    f"Successful login for '{event.username}' on {event.hostname} "
+                    f"from {event.source_ip} followed {len(recent)} failed logins "
+                    f"for the same account, host, and IP within the preceding "
+                    f"{settings.success_after_failures_window} "
+                    f"(threshold: {settings.repeated_threshold}). "
+                    "Possible account compromise requires investigation."
+                ),
+                evidence=tuple(recent) + (event,),
+            ))
+
+        # The previous failures must not be reused for every later success.
+        recent.clear()
+
+    return sorted(alerts, key=lambda alert: (
+        alert.timestamp, alert.hostname, alert.source_ip, alert.usernames,
+        alert.evidence[-1].line_number,
+    ))
+
+
+def detect_suspicious_events(
+    events: Iterable[LogEvent], settings: DetectionSettings
+) -> list[Alert]:
+    """FEATURE 2: Run both rules on the same input, including a one-use iterator."""
+    # Materializing once ensures a generator is not exhausted by the first rule.
+    records = tuple(events)
+    alerts = detect_invalid_user_attempts(records)
+    alerts.extend(detect_success_after_failures(records, settings))
+    return sorted(alerts, key=lambda alert: (
+        alert.timestamp, alert.hostname, alert.source_ip, alert.usernames, alert.rule
+    ))
 
 
 # FEATURE 4: Detect repeated failed logins per host and source IP.
