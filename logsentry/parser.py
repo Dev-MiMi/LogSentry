@@ -115,6 +115,10 @@ def parse_log_line(line: str, line_number: int, dates: TimestampReader) -> LogEv
     invalid = INVALID_USER.fullmatch(message)
     details = login or invalid
     if details is None:
+        # At VERBOSE level OpenSSH reports locating an authorized key before
+        # authentication completes. Only "Accepted publickey for ..." is a login.
+        if message.startswith("Accepted key "):
+            return LogEvent(timestamp=dates.parse(match["time"]), event_type="other", **fields)
         if message.startswith(("Failed ", "Accepted ", "Invalid user ")):
             raise ValueError("Incomplete or unrecognized SSH authentication record.")
         return LogEvent(timestamp=dates.parse(match["time"]), event_type="other", **fields)

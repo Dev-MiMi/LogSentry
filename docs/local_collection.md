@@ -92,14 +92,19 @@ Formats:
 - `dpkg`: `YYYY-MM-DD HH:MM:SS message`. Package activity gets an event timestamp
   and is available as investigation context. Package-specific rules are not
   implemented yet.
+- `sshd_capture`: actual OpenSSH messages captured by LogSentry's local endpoint.
+  Timestamps are explicitly labelled observation times; existing SSH rules apply.
+  See [SSH collection](ssh_collection.md).
 - `text`: arbitrary UTF-8 lines. Preserves content and collection time without
   inventing an event time. Use this for APT history and raw application output.
 
 Termux OpenSSH output written directly with `sshd -E` often has no syslog
 timestamp/hostname prefix. Collect such a file as `text`; the current SSH rules
 cannot evaluate it. To use those rules, the source must supply timestamped
-syslog-format SSH records. This collector does not start SSH, change its
-authentication settings, or assume `/var/log/auth.log` exists in a proot Ubuntu.
+syslog-format SSH records. Alternatively, the separate `ssh_capture` command
+runs a dedicated localhost endpoint and captures its messages with observation
+times. The file collector itself does not start SSH or assume `/var/log/auth.log`
+exists in a proot Ubuntu.
 
 For real logs, the current SSH policy still uses the engine defaults (3 repeated
 failures, 5 in 5 minutes, normal hours 06:00–22:00, trusted `192.168.1.0/24`). The

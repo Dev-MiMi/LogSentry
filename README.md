@@ -55,6 +55,17 @@ Records are stored privately under ignored `runtime/`, with 10,000 retained
 per source. The collector runs locally and needs read access to each source.
 See [local collection setup and limits](docs/local_collection.md).
 
+## Collect real SSH authentication
+
+For systems without `auth.log` or a running journal, LogSentry can capture actual
+OpenSSH output from a separate localhost endpoint. With OpenSSH installed, run
+`python3 -m logsentry.ssh_capture setup` once, then
+`python3 -m logsentry.ssh_capture serve`. Keep the collector running and select
+**local-ssh** in the dashboard. The command prints a key-based login check.
+See [SSH collection](docs/ssh_collection.md) for setup and the observation-time
+limitations of direct SSH output. Existing `/var/log/auth.log` files can instead
+be registered directly as `syslog` sources.
+
 ## Save an incident report
 
 For an existing Ubuntu SSH authentication log, supply its path, starting year

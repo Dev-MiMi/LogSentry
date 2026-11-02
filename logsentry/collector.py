@@ -86,7 +86,7 @@ def _collect_transaction(connection, source_id: int) -> int:
             # legacy record following Dec must still advance to the next year.
         stream.seek(offset)
         received_at, count, byte_count = _now(), 0, 0
-        line_limit = MAX_TEXT_LINE_BYTES if source.format == "text" else MAX_LINE_BYTES
+        line_limit = MAX_TEXT_LINE_BYTES if source.format in {"text", "sshd_capture"} else MAX_LINE_BYTES
         while count < BATCH_LINES and byte_count < BATCH_BYTES:
             raw = stream.readline(line_limit + 1)
             if not raw:
@@ -110,12 +110,13 @@ def _collect_transaction(connection, source_id: int) -> int:
                     event = interpret(line, number, dates, source)
                 except (ValueError, OverflowError) as error:
                     issue = str(error)
+            evidence_line = event.raw_line if event and source.format == "sshd_capture" else line
             connection.execute("""
                 INSERT INTO records(source_id, generation, line_number, received_at,
                     raw_line, timestamp, hostname, event_type, username, source_ip,
                     authentication_method, invalid_user, issue)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (source_id, generation, number, received_at, line,
+            """, (source_id, generation, number, received_at, evidence_line,
                   event.timestamp.isoformat() if event else None,
                   event.hostname if event else source.hostname,
                   event.event_type if event else ("unparsed" if issue else "raw_text"),
@@ -160,7 +161,7 @@ def _parser():
     parser.add_argument("--discover", action="store_true", help="Register known Ubuntu/Termux log paths that exist")
     parser.add_argument("--file", type=Path, help="Register one explicit log file")
     parser.add_argument("--name", help="Unique name for --file")
-    parser.add_argument("--format", choices=("syslog", "dpkg", "text"), default="syslog")
+    parser.add_argument("--format", choices=("syslog", "dpkg", "text", "sshd_capture"), default="syslog")
     parser.add_argument("--year", type=int, help="Starting year of the source; required when registering sources")
     parser.add_argument("--timezone", default="UTC", help="Source timezone (default UTC); use the actual source timezone")
     parser.add_argument("--list", action="store_true", help="Show registered sources without reading logs")

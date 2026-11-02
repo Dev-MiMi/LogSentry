@@ -1,6 +1,8 @@
 """HTTP checks for real local collection, using an isolated temporary store."""
 
 from pathlib import Path
+import json
+import socket
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
@@ -244,3 +246,20 @@ class CollectedPagesTests(SimpleTestCase):
         evidence = self.client.get(reverse("dashboard:collected_alert", args=[source_id, finding["id"]]))
         self.assertNotContains(evidence, 'collected.js')
         self.assertContains(self.client.get("/"), 'collected.js')
+
+    def test_captured_ssh_displays_original_message_and_observed_time_with_findings(self):
+        message = "Failed publickey for alice from 127.0.0.1 port 33333 ssh2: ED25519 SHA256:example"
+        envelope = json.dumps({"version": 1, "hostname": socket.gethostname(),
+                               "observed_at": "2026-11-02T12:00:00+00:00", "message": message})
+        source_id, _ = self.add_source((envelope + "\n") * 5, "local-ssh", "sshd_capture")
+        response = self.client.get(self.source_url(source_id))
+        self.assertContains(response, "Possible brute-force attack")
+        self.assertContains(response, "Observed at: 2 Nov 2026, 1:00:00 PM WAT")
+        self.assertContains(response, message)
+        self.assertNotContains(response, "Event time:")
+        self.assertNotContains(response, '"observed_at"')
+        self.assertContains(response, "detection windows use this observation time")
+        finding = response.context["findings"][0]
+        detail = self.client.get(reverse("dashboard:collected_alert", args=[source_id, finding["id"]]))
+        self.assertContains(detail, "actual SSH server messages")
+        self.assertContains(detail, message)
