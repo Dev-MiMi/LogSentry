@@ -1,12 +1,20 @@
 from datetime import datetime
+import argparse
+
+
+# The learning script now requires a real input path rather than demo data.
+parser = argparse.ArgumentParser(description="Learning script for traditional SSH log timestamps.")
+parser.add_argument("log_file", help="Path to an existing authentication log")
+parser.add_argument("--year", required=True, type=int, help="Starting year of the log")
+arguments = parser.parse_args()
 
 
 try:
-    with open('samples/auth.log') as file_object:
+    with open(arguments.log_file) as file_object:
 
         failed_logins = {}
         count_failed = 0
-        current_year = datetime.now().year
+        current_year = arguments.year
         failed_times = {}
 
         for line in file_object:

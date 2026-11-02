@@ -22,7 +22,7 @@ from logsentry.reporting import build_investigation_report, generate_incident_re
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SAMPLE = ROOT / "samples/auth.log"
+SAMPLE = ROOT / "tests/fixtures/ssh_auth.log"
 
 
 class ReportingTests(unittest.TestCase):
@@ -261,7 +261,7 @@ class CommandTests(unittest.TestCase):
 
     def test_python_module_entry_point_runs_successfully(self):
         result = subprocess.run(
-            [sys.executable, "-m", "logsentry", "samples/auth.log", "--year", "2026", "--timezone", "UTC"],
+            [sys.executable, "-m", "logsentry", "tests/fixtures/ssh_auth.log", "--year", "2026", "--timezone", "UTC"],
             cwd=ROOT, capture_output=True, text=True, check=False, timeout=15,
         )
         self.assertEqual(result.returncode, 0, result.stderr)

@@ -1,5 +1,9 @@
 # Features 3 and 8: a runnable command and investigation report
 
+The sample calculations in this learning walkthrough use the fictional test
+fixture in `tests/fixtures/ssh_auth.log`. The dashboard displays collected system
+logs only; see [local collection](local_collection.md) for operational use.
+
 The package now has an entry point that calls the existing functions. You do
 not need to run `parser.py` or `detection.py` directly.
 
@@ -9,7 +13,7 @@ Run from the project root:
 
 ```bash
 cd /root/LogSentry
-python3 -m logsentry samples/auth.log --year 2026 --timezone UTC
+python3 -m logsentry tests/fixtures/ssh_auth.log --year 2026 --timezone UTC
 ```
 
 The report describes all six sample findings, their priorities, reasons, and
@@ -21,7 +25,7 @@ of the current engine's policy.
 To save a new report as well:
 
 ```bash
-python3 -m logsentry samples/auth.log --year 2026 --timezone UTC --output reports/sample_incident.txt
+python3 -m logsentry tests/fixtures/ssh_auth.log --year 2026 --timezone UTC --output reports/sample_incident.txt
 ```
 
 Existing paths are refused. Choose another filename on subsequent runs. Reports

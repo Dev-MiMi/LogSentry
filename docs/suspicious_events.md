@@ -1,5 +1,9 @@
 # Feature 2: invalid users and success after failures
 
+The sample calculations in this learning walkthrough use the fictional test
+fixture in `tests/fixtures/ssh_auth.log`. The dashboard displays collected system
+logs only; see [local collection](local_collection.md) for operational use.
+
 This change adds two rules to `logsentry/detection.py`. Call
 `detect_suspicious_events(events, settings)` to run both, or call each separately.
 They return Alert records without reading files, changing accounts, or saving
@@ -104,7 +108,7 @@ from logsentry.parser import read_system_logs
 from logsentry.detection import detect_suspicious_events
 
 settings = DetectionSettings(year=2026)
-parsed = read_system_logs("samples/auth.log", settings)
+parsed = read_system_logs("tests/fixtures/ssh_auth.log", settings)
 alerts = detect_suspicious_events(parsed.events, settings)
 
 for alert in alerts:

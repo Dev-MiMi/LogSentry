@@ -1,0 +1,10 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+{% block title %}Collected logs{% endblock %}
+{% block scripts %}<script src="{% static 'dashboard/collected.js' %}" defer></script>{% endblock %}
+{% block content %}
+<section class="page-heading"><div><p class="eyebrow">LOCAL COLLECTION</p><h1>{% if source %}{{ source.name }}{% else %}Collected logs{% endif %}</h1><p class="subtitle">New records and findings appear automatically while collection is running.</p></div><a class="button" href="">Refresh now</a></section>
+<div class="live-controls" data-live-controls hidden><p data-live-status role="status" aria-live="polite">Connecting to updates…</p><button class="button" type="button" data-live-toggle aria-pressed="false">Pause updates</button></div>
+<noscript><aside class="notice">JavaScript is disabled. Use Refresh now to see new records.</aside></noscript>
+<div id="collected-content" data-revision="{{ revision|default:'' }}">{% include 'dashboard/collected_content.html' %}</div>
+{% endblock %}

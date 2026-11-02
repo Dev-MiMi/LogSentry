@@ -71,7 +71,7 @@ class ParserTests(unittest.TestCase):
         return parse_lines(lines, DetectionSettings(year=2026, **settings))
 
     def test_sample_counts_and_evidence(self):
-        result = read_system_logs(ROOT / "samples/auth.log", self.settings)
+        result = read_system_logs(ROOT / "tests/fixtures/ssh_auth.log", self.settings)
         self.assertEqual(result.total_lines, 12)
         self.assertFalse(result.issues)
         self.assertEqual(Counter(event.event_type for event in result.events), {

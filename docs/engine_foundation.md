@@ -1,5 +1,9 @@
 # Reading the three foundation modules
 
+The sample calculations in this learning walkthrough use the fictional test
+fixture in `tests/fixtures/ssh_auth.log`. The dashboard displays collected system
+logs only; see [local collection](local_collection.md) for operational use.
+
 These modules implement the log-reading foundation. They do not yet run
 detection rules, generate reports, or serve a Django dashboard. Your existing
 `log_reader.py` and `logsentry_reference.py` remain separate learning examples.
@@ -83,7 +87,7 @@ from logsentry.config import DetectionSettings
 from logsentry.parser import read_system_logs
 
 settings = DetectionSettings(year=2026)
-result = read_system_logs("samples/auth.log", settings)
+result = read_system_logs("tests/fixtures/ssh_auth.log", settings)
 
 print(len(result.events))             # 12 parsed events
 print(len(result.issues))             # 0 rejected lines

@@ -1,0 +1,26 @@
+{% load display_time %}
+{% if storage_error %}<aside class="notice" role="alert">Collected logs could not be loaded. Check the collector storage and server logs.</aside>
+{% else %}
+<section class="panel" id="sources"><div class="panel-heading"><h2>Log sources</h2><span class="count-chip">{{ sources|length }} sources</span></div>
+<div class="table-scroll"><table><thead><tr><th>Source</th><th>Format</th><th>Retained records</th><th>Last check · WAT</th><th>Collection state</th></tr></thead><tbody>
+{% for item in sources %}<tr data-source-id="{{ item.id }}"><td><a href="{% url 'dashboard:collected_source' item.id %}">{{ item.name }}</a></td><td>{{ item.format }}</td><td>{{ item.record_count }}</td><td data-last-check>{{ item.collection_state.last_checked }}</td><td data-collection-state{% if item.collection_state.attention %} class="text-orange"{% endif %}>{{ item.collection_state.label }}</td></tr>
+{% empty %}<tr><td colspan="5" class="empty-state">No collected sources yet. From the project root, run <code>python3 -m logsentry.collector --discover --year YEAR --timezone ZONE</code> with the source's starting year and timezone.</td></tr>{% endfor %}
+</tbody></table></div><p class="panel-footnote">The collector runs in a separate terminal: <code>python3 -m logsentry.collector --watch</code>. A check older than 15 seconds is marked as delayed; longer custom collection intervals can also cause this.</p></section>
+{% if source %}
+<div class="source-strip"><strong>{{ source.name }}</strong><span class="source-file">{{ source.path }}</span><span>Log timezone: {{ source.timezone }}</span></div>
+{% if source.last_error %}<aside class="notice" role="alert"><strong>Collection paused for this source:</strong> {{ source.last_error }}. Earlier records remain visible.</aside>{% endif %}
+{% if source.issue_count %}<aside class="notice" role="status">Partial parsing: {{ source.issue_count }} retained records could not be interpreted. See their issues below.</aside>{% endif %}
+{% if source.rotations %}<aside class="notice">{{ source.rotations }} file replacement/truncation{{ source.rotations|pluralize }} detected. Records written to an old file between polls may be missing.</aside>{% endif %}
+{% if source.dropped %}<aside class="notice">Retention removed {{ source.dropped }} older records from this source. Detection covers the latest retained records only.</aside>{% endif %}
+<section class="panel" id="alerts"><div class="panel-heading"><h2>Detection findings</h2><span class="count-chip">{{ findings|length }} alerts</span></div>
+{% if source.format == 'syslog' %}
+<div class="table-scroll"><table><thead><tr><th>Finding</th><th>Severity</th><th>Source IP</th><th>Evidence</th></tr></thead><tbody>
+{% for finding in findings %}<tr><td><a href="{% url 'dashboard:collected_alert' source.id finding.id %}">{{ finding.label }}</a></td><td><span class="badge {{ finding.alert.severity|lower }}">{{ finding.alert.severity }}</span></td><td>{{ finding.alert.source_ip }}</td><td>{{ finding.alert.evidence|length }} records</td></tr>{% empty %}<tr><td colspan="4" class="empty-state">No SSH alerts under the configured policy. Check source coverage before drawing conclusions.</td></tr>{% endfor %}
+</tbody></table></div><p class="panel-footnote">Rules run separately for each source over up to 10,000 retained records. Login hours: {{ analysis.settings.normal_start_hour }}:00–{{ analysis.settings.normal_end_hour }}:00 {{ analysis.settings.timezone_name }}. Trusted networks: {{ analysis.settings.trusted_networks|join:', ' }}. These are the current default detection settings.</p>
+{% else %}<p class="panel-footnote">These records provide investigation context. SSH login rules do not assess package activity or unstructured text; no security conclusion is inferred from zero alerts.</p>{% endif %}
+</section>
+<section class="panel" id="timeline"><div class="panel-heading"><h2>Recent records</h2><span class="count-chip">{{ records|length }} shown / {{ source.record_count }} retained</span></div>
+<p class="panel-footnote">Newest collected first, up to {{ record_limit }} records. Event time comes from the log; collection time is when LogSentry read it. Text records may have no event time.</p>
+<ol class="evidence-list">{% for record in records %}<li data-record-id="{{ record.id }}"><div class="evidence-meta"><span>RECORD {{ record.id }} · FILE {{ record.generation }} · LINE {{ record.line_number }}</span><span>{{ record.event_type }}</span></div><p>Event time: {{ record.timestamp|readable_timestamp }}<br>Collected at: {{ record.received_at|readable_timestamp }}</p><pre><code>{{ record.raw_display }}</code></pre>{% if record.issue %}<p class="text-orange">{{ record.issue }}</p>{% endif %}</li>{% empty %}<li>No complete records have been collected yet.</li>{% endfor %}</ol></section>
+{% endif %}
+{% endif %}

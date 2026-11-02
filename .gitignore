@@ -8,3 +8,6 @@ __pycache__/
 reports/
 # Local databases will be introduced with the Django application.
 *.sqlite3
+staticfiles/
+# Local collector state and raw records must not be committed.
+runtime/

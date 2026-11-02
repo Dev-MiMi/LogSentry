@@ -1,0 +1,10 @@
+{% extends 'dashboard/base.html' %}
+{% load display_time %}
+{% block title %}Collected alert evidence{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'dashboard:collected_source' source.id %}">← Back to {{ source.name }}</a>
+<section class="page-heading"><div><p class="eyebrow">COLLECTED EVIDENCE</p><h1>{{ row.label }}</h1></div><span class="badge {{ row.alert.severity|lower }}">{{ row.alert.severity }}</span></section>
+<section class="panel"><div class="panel-heading"><h2>Why this was flagged</h2></div><p class="reason">{{ row.alert.description }}</p><p class="panel-footnote">Source: {{ source.name }} · {{ source.path }}</p></section>
+<section class="panel"><div class="panel-heading"><h2>Supporting records</h2></div><ol class="evidence-list">{% for record in evidence %}<li><div class="evidence-meta"><span>RECORD {{ record.id }} · FILE {{ record.generation }} · LINE {{ record.line_number }}</span><span>{{ record.timestamp|readable_timestamp }}</span></div><pre><code>{{ record.raw_display }}</code></pre></li>{% endfor %}</ol></section>
+<aside class="detail-note">This finding is a lead for investigation and does not confirm an attack. File generations distinguish records before and after rotation.</aside>
+{% endblock %}

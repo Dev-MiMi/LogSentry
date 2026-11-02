@@ -1,5 +1,9 @@
 # Feature 5: possible brute-force attacks
 
+The sample calculations in this learning walkthrough use the fictional test
+fixture in `tests/fixtures/ssh_auth.log`. The dashboard displays collected system
+logs only; see [local collection](local_collection.md) for operational use.
+
 The new `detect_brute_force_attacks(events, settings)` function in
 `logsentry/detection.py` looks for rapid failed-login attempts. Feature 4 counts
 failures across the whole imported file; Feature 5 adds a time requirement.
@@ -58,7 +62,7 @@ from logsentry.parser import read_system_logs
 from logsentry.detection import detect_brute_force_attacks
 
 settings = DetectionSettings(year=2026)
-parsed = read_system_logs("samples/auth.log", settings)
+parsed = read_system_logs("tests/fixtures/ssh_auth.log", settings)
 alerts = detect_brute_force_attacks(parsed.events, settings)
 
 print(len(alerts))                 # 1

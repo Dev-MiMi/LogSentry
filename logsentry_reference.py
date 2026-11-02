@@ -1,10 +1,10 @@
 """A complete, beginner-friendly reference version of the LogSentry engine.
 
 This file demonstrates the eight planned LogSentry features in one place.
-It reads the fictional Ubuntu authentication log in samples/auth.log.
+It reads an authentication log explicitly supplied on the command line.
 
 Run it from the project directory with:
-    python3 logsentry_reference.py
+    python3 logsentry_reference.py /path/to/auth.log
 """
 
 from collections import Counter, defaultdict
@@ -14,13 +14,13 @@ from pathlib import Path
 import ipaddress
 import re
 from typing import Optional
+import argparse
 
 
 # ---------------------------------------------------------------------------
 # SETTINGS: These values make the detection rules easy to change later.
 # ---------------------------------------------------------------------------
 
-LOG_PATH = Path("samples/auth.log")
 REPORT_PATH = Path("reports/latest_incident_report.txt")
 
 # Three failures from one IP are treated as repeated failed login attempts.
@@ -512,13 +512,17 @@ def generate_incident_report(report: str, report_path: Path) -> None:
 def main() -> None:
     """Run the LogSentry reference engine from log input to report output."""
 
+    parser = argparse.ArgumentParser(description="Standalone learning reference; use python -m logsentry for the maintained engine.")
+    parser.add_argument("log_file", type=Path, help="Path to an existing authentication log")
+    arguments = parser.parse_args()
+    log_path = arguments.log_file
     try:
-        events = read_system_logs(LOG_PATH)
+        events = read_system_logs(log_path)
     except FileNotFoundError:
-        print(f"Log file was not found: {LOG_PATH}")
+        print(f"Log file was not found: {log_path}")
         return
     except PermissionError:
-        print(f"Permission denied while reading: {LOG_PATH}")
+        print(f"Permission denied while reading: {log_path}")
         return
 
     # Each detector returns Alert objects. Combining them gives the report one
@@ -529,7 +533,7 @@ def main() -> None:
     alerts.extend(detect_brute_force_attacks(events))
     alerts.extend(detect_suspicious_logins(events))
 
-    report = build_investigation_report(LOG_PATH, events, alerts)
+    report = build_investigation_report(log_path, events, alerts)
     generate_incident_report(report, REPORT_PATH)
 
     # Print the same report in the terminal for immediate review.

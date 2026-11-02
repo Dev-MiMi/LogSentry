@@ -1,0 +1,28 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>{% block title %}Dashboard{% endblock %} · LogSentry</title>
+  <link rel="stylesheet" href="{% static 'dashboard/dashboard.css' %}">
+  {% block scripts %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{% url 'dashboard:index' %}" aria-label="LogSentry dashboard">
+      <span class="brand-mark" aria-hidden="true">L</span><span>Log<span class="brand-accent">Sentry</span></span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a{% if not source %} class="nav-current"{% endif %} href="{% url 'dashboard:index' %}">Dashboard</a>
+      <a href="{% url 'dashboard:index' %}#sources">Log sources</a>
+      {% if source %}<a href="{% url 'dashboard:collected_source' source.id %}#alerts">Alerts</a>
+      <a href="{% url 'dashboard:collected_source' source.id %}#timeline">Logs &amp; events</a>{% endif %}
+    </nav>
+    <span class="collection-chip"><span aria-hidden="true"></span>Local collection</span>
+  </header>
+  <main class="workspace">{% block content %}{% endblock %}</main>
+  <footer class="site-footer"><span>LogSentry · Linux authentication monitoring</span><span>Collected system logs · Nigeria time · WAT (UTC+1)</span></footer>
+</body>
+</html>

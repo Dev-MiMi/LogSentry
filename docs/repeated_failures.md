@@ -1,5 +1,9 @@
 # First detection rule: repeated failed logins
 
+The sample calculations in this learning walkthrough use the fictional test
+fixture in `tests/fixtures/ssh_auth.log`. The dashboard displays collected system
+logs only; see [local collection](local_collection.md) for operational use.
+
 This is Feature 4 of LogSentry. It uses the events from `parser.py`, the
 `repeated_threshold` from `config.py`, and the `Alert` record from `data.py`.
 It returns findings without reading files, saving reports, or printing output.
@@ -45,7 +49,7 @@ from logsentry.parser import read_system_logs
 from logsentry.detection import detect_repeated_failed_logins
 
 settings = DetectionSettings(year=2026)
-parsed = read_system_logs("samples/auth.log", settings)
+parsed = read_system_logs("tests/fixtures/ssh_auth.log", settings)
 alerts = detect_repeated_failed_logins(parsed.events, settings)
 
 print(len(alerts))                   # 1

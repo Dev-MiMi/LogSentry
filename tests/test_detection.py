@@ -40,7 +40,7 @@ class RepeatedFailureTests(unittest.TestCase):
         return replace(event, **changes)
 
     def test_sample_produces_one_alert_with_original_evidence(self):
-        parsed = read_system_logs(ROOT / "samples/auth.log", self.settings)
+        parsed = read_system_logs(ROOT / "tests/fixtures/ssh_auth.log", self.settings)
         alerts = detect_repeated_failed_logins(parsed.events, self.settings)
         self.assertEqual(len(alerts), 1)
         alert = alerts[0]
@@ -143,7 +143,7 @@ class BruteForceTests(unittest.TestCase):
         ) for number, offset in enumerate(seconds)]
 
     def test_sample_alert_contains_five_original_failures_in_68_seconds(self):
-        parsed = read_system_logs(ROOT / "samples/auth.log", self.settings)
+        parsed = read_system_logs(ROOT / "tests/fixtures/ssh_auth.log", self.settings)
         alerts = detect_brute_force_attacks(parsed.events, self.settings)
         self.assertEqual(len(alerts), 1)
         alert = alerts[0]
@@ -289,7 +289,7 @@ class SuspiciousLoginTests(unittest.TestCase):
         return replace(event, **changes)
 
     def test_sample_flags_two_successes_with_their_specific_reasons(self):
-        parsed = read_system_logs(ROOT / "samples/auth.log", self.settings)
+        parsed = read_system_logs(ROOT / "tests/fixtures/ssh_auth.log", self.settings)
         alerts = detect_suspicious_logins(parsed.events, self.settings)
         self.assertEqual(len(alerts), 2)
         bob, alice = alerts
@@ -450,7 +450,7 @@ class SuspiciousEventTests(unittest.TestCase):
                 self.event(30, "successful_login")]
 
     def test_sample_yields_account_success_and_one_invalid_user_finding(self):
-        parsed = read_system_logs(ROOT / "samples/auth.log", self.settings)
+        parsed = read_system_logs(ROOT / "tests/fixtures/ssh_auth.log", self.settings)
         alerts = detect_suspicious_events(parsed.events, self.settings)
         self.assertEqual(len(alerts), 2)
         success, invalid = alerts

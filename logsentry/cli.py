@@ -7,7 +7,7 @@ import sys
 from typing import Sequence
 
 from .config import DetectionSettings
-from .data import Analysis
+from .data import Analysis, ParsedLog
 from .detection import (
     detect_brute_force_attacks,
     detect_repeated_failed_logins,
@@ -25,13 +25,18 @@ def analyze_log(log_path: str | Path, settings: DetectionSettings) -> Analysis:
     call the same function instead of duplicating the security rules.
     """
     parsed = read_system_logs(log_path, settings)  # FEATURE 1.
+    return analyze_parsed(parsed, str(log_path), settings)
+
+
+def analyze_parsed(parsed: ParsedLog, source_name: str, settings: DetectionSettings) -> Analysis:
+    """Apply the same rules to a file or to records saved by the collector."""
     alerts = detect_suspicious_events(parsed.events, settings)  # FEATURE 2.
     alerts.extend(detect_repeated_failed_logins(parsed.events, settings))  # FEATURE 4.
     alerts.extend(detect_brute_force_attacks(parsed.events, settings))  # FEATURE 5.
     alerts.extend(detect_suspicious_logins(parsed.events, settings))  # FEATURE 6.
     # FEATURE 7: Each detector attaches its severity and original evidence.
     return Analysis(
-        source_name=str(log_path), settings=settings, parsed=parsed,
+        source_name=source_name, settings=settings, parsed=parsed,
         alerts=tuple(alerts), generated_at=datetime.now(timezone.utc),
     )
 
