@@ -54,7 +54,7 @@ records, not saved incident tickets.
 
 ## Local access and verification
 
-This development dashboard has no accounts or remote log upload endpoints. Keep
+This development dashboard has no user accounts. Keep
 it bound to `127.0.0.1`; the collector and browser view run locally. If Ubuntu is
 on another computer, an SSH tunnel can provide local browser access:
 
@@ -63,10 +63,15 @@ ssh -L 8000:127.0.0.1:8000 your-user@your-server
 ```
 
 Templates escape log content. Browser URLs cannot choose filesystem paths.
-Requests use GET/HEAD and read-only database access; storage failures show an
+These collection pages use GET/HEAD and read-only database access; storage failures show an
 explicit error rather than fallback data. Django uses a dummy ORM database
 because its own account/models layer has not yet been added; the collector's
 SQLite store is separate.
+
+The [event inbox](web_receiver.md) at `/receiver/` displays authenticated
+submissions to `/api/v1/events/` in a separate private store. The POST API
+requires a collector token; browser pages remain local. This is the first
+web-to-Wazuh milestone; forwarding to Wazuh is not connected yet.
 
 To install dependencies on another machine:
 
@@ -80,7 +85,7 @@ Run verification from the project root:
 
 ```bash
 .venv/bin/python manage.py check
-.venv/bin/python manage.py test dashboard -v 2
+.venv/bin/python manage.py test receiver dashboard -v 2
 python3 -m unittest discover -s tests -v
 node --test tests/collected_live.test.cjs
 ```

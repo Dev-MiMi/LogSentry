@@ -1,4 +1,4 @@
-"""Settings for the local dashboard of collected Ubuntu and Termux logs."""
+"""Settings for the local dashboard and authenticated collector inbox."""
 
 import os
 from pathlib import Path
@@ -19,7 +19,10 @@ if not SECRET_KEY:
 # Development server binds to loopback by default. Add other hosts explicitly
 # only when needed; no wildcard allowed-host setting is used.
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "[::1]"]
-INSTALLED_APPS = ["django.contrib.staticfiles", "dashboard.apps.DashboardConfig"]
+INSTALLED_APPS = [
+    "django.contrib.staticfiles", "rest_framework",
+    "dashboard.apps.DashboardConfig", "receiver.apps.ReceiverConfig",
+]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -51,3 +54,14 @@ SECURE_REFERRER_POLICY = "same-origin"
 # The local collector owns this separate SQLite store. Web requests open it
 # read-only; URL parameters can select source IDs, never filesystem paths.
 LOGSENTRY_COLLECTION_DATABASE = BASE_DIR / "runtime" / "collection.sqlite3"
+
+# Milestone 1: a separate, local event inbox. Incoming events cannot modify the
+# collector's evidence database. Credentials are generated, never committed.
+LOGSENTRY_RECEIVER_DATABASE = BASE_DIR / "runtime" / "receiver" / "events.sqlite3"
+LOGSENTRY_RECEIVER_CREDENTIALS = BASE_DIR / "runtime" / "receiver" / "credentials.json"
+REST_FRAMEWORK = {
+    "UNAUTHENTICATED_USER": None,  # No Django accounts or session authentication.
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+}

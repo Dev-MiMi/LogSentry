@@ -3,4 +3,7 @@
 from django.urls import include, path
 
 
-urlpatterns = [path("", include("dashboard.urls"))]
+urlpatterns = [
+    path("", include("dashboard.urls")),
+    path("", include("receiver.urls")),
+]

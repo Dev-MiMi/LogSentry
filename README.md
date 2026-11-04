@@ -4,6 +4,7 @@ A Python security log analyzer focused on Ubuntu SSH authentication. The engine
 reads log files, detects suspicious patterns, assigns priorities, and generates
 investigation reports. It includes a CLI, a local Django dashboard, and an
 incremental collector for accessible Ubuntu/Termux log files.
+An authenticated web inbox starts the next phase toward Wazuh integration.
 
 Requires Python 3.10+ and system timezone data. No third-party Python packages
 are needed for the engine. The dashboard uses Django 5.2 LTS, installed in
@@ -23,7 +24,7 @@ lists sources and counts from the local collection database. Select a source
 to inspect its records and supported SSH findings. Without collected data, it
 shows an empty state. All displayed events come from explicitly collected files;
 there is no sample dashboard or demo-data fallback. Times use Nigeria time,
-**WAT (UTC+1)**. User accounts and log uploads are not implemented yet. See
+**WAT (UTC+1)**. User accounts and browser file uploads are not implemented yet. See
 [the Django walkthrough](docs/django_dashboard.md) for setup and the request flow.
 
 To install the web dependencies on another machine:
@@ -33,6 +34,27 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
+
+## Web-to-Wazuh milestone 1: event inbox
+
+With `.venv` active, provision the receiver once:
+
+```bash
+python manage.py init_receiver --collector-id logsentry-local
+```
+
+Run Django on loopback as above, then open **http://127.0.0.1:8000/receiver/**.
+In another terminal, submit real saved records from an existing source:
+
+```bash
+python manage.py send_collected_events --source ubuntu-dpkg --limit 5
+```
+
+Choose a source actually registered on your installation. The API authenticates
+the collector, validates records and deduplicates retries. Evidence and tokens
+stay in private, ignored `runtime/receiver/` files. This confirms LogSentry
+receipt; **Wazuh forwarding is not connected yet**. Browser pages remain local
+and have no user login. See the [receiver walkthrough](docs/web_receiver.md).
 
 ## Collect local Ubuntu/Termux logs
 
@@ -113,7 +135,7 @@ For the Django pages, with `.venv` active:
 
 ```bash
 python manage.py check
-python manage.py test dashboard -v 2
+python manage.py test receiver dashboard -v 2
 node --test tests/collected_live.test.cjs
 ```
 

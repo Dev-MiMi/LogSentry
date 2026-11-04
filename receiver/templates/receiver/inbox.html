@@ -1,0 +1,34 @@
+{% extends 'dashboard/base.html' %}
+{% load display_time %}
+{% block title %}Event inbox{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><p class="eyebrow">COLLECTION RECEIVER</p><h1>Event inbox</h1>
+    <p class="subtitle">Events submitted by your collector. Times are displayed in Nigeria time.</p></div>
+  <a class="button" href="{% url 'receiver:inbox' %}">Refresh inbox</a>
+</div>
+{% if storage_error %}
+<aside class="notice" role="alert">The inbox could not be loaded. Check the receiver storage.</aside>
+{% else %}
+<div class="source-strip">
+  {% if configured %}<strong>Collector: {{ collector_id }}</strong><span>Ready to receive</span>
+  {% else %}<strong>Receiver not configured</strong><span>Run <code>python manage.py init_receiver --collector-id linux-pc</code> from the project root.</span>{% endif %}
+</div>
+<section class="panel">
+  <div class="panel-heading"><h2>Received events</h2><span class="count-chip">{{ total }} stored · {{ events|length }} shown</span></div>
+  <p class="panel-footnote">Wazuh forwarding is not connected yet. These are collector reports; receiving an event does not verify its contents or indicate a security incident. App activity alone does not prove a login.</p>
+  <ol class="evidence-list">
+    {% for event in events %}<li>
+      <div class="evidence-meta"><span>{{ event.source }}</span><span>{{ event.event_type }}</span><span>{{ event.platform }}</span></div>
+      <p>Collector: {{ event.collector_id }}<br>
+      Event time: {{ event.occurred_at|readable_timestamp }}<br>
+      Observed by collector: {{ event.observed_at|readable_timestamp }}<br>
+      Received here: {{ event.received_at|readable_timestamp }}</p>
+      <pre><code>{{ event.message }}</code></pre>
+      <p class="subtitle">Event ID: {{ event.event_id }}</p>
+    </li>{% empty %}<li class="empty-state">No events received yet. Send records from a configured collector to populate this inbox.</li>{% endfor %}
+  </ol>
+  <p class="panel-footnote">Newest received first, up to 100 displayed. The inbox holds at most 10,000 events and rejects new events when full; it never silently removes unforwarded records.</p>
+</section>
+{% endif %}
+{% endblock %}
