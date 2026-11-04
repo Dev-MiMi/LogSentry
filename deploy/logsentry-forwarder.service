@@ -1,0 +1,22 @@
+[Unit]
+Description=LogSentry queued event delivery
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=logsentry
+Group=logsentry
+WorkingDirectory=/opt/logsentry
+Environment=LOGSENTRY_RUNTIME_DIR=/var/lib/logsentry
+ExecStart=/opt/logsentry/.venv/bin/python manage.py forward_events --watch
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/logsentry
+
+[Install]
+WantedBy=multi-user.target

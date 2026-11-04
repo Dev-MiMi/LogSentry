@@ -1,0 +1,41 @@
+# Install inside /etc/nginx/conf.d/ after replacing the hostname and providing TLS.
+# These limit zones belong in Nginx's http context (conf.d is included there).
+limit_req_zone $binary_remote_addr zone=logsentry_login:10m rate=5r/m;
+limit_req_zone $binary_remote_addr zone=logsentry_api:10m rate=10r/s;
+limit_req_status 429;
+
+server {
+    listen 443 ssl;
+    server_name logsentry.example.com;
+    ssl_certificate /etc/logsentry/tls/fullchain.pem;
+    ssl_certificate_key /etc/logsentry/tls/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 256k;
+    client_body_timeout 15s;
+    add_header X-Content-Type-Options nosniff always;
+
+    location /static/ {
+        alias /opt/logsentry/staticfiles/;
+    }
+    location = /accounts/login/ {
+        limit_req zone=logsentry_login burst=5 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+    location /api/ {
+        limit_req zone=logsentry_api burst=20 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_read_timeout 30s;
+    }
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+}

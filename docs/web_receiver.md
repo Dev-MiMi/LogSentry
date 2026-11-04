@@ -1,8 +1,9 @@
 # Web-to-Wazuh milestone 1: authenticated event inbox
 
-This milestone adds an API that receives real collector events and a browser
-inbox showing their timestamps in Nigeria time. It is local, uses one collector
-identity, and does not yet forward to Wazuh. No fictional data is loaded at startup.
+This guide describes the event contract introduced in milestone 1. The current
+implementation also includes [milestone 2](reliable_delivery.md): browser login,
+multiple revocable collector identities, offline queues and HTTPS deployment.
+No fictional data is loaded at startup; Wazuh forwarding remains future work.
 
 ## Run it
 
@@ -11,6 +12,7 @@ From the project root:
 ```bash
 source .venv/bin/activate
 python -m pip install -r requirements.txt
+python manage.py init_web --username admin
 python manage.py init_receiver --collector-id logsentry-local
 python manage.py runserver 127.0.0.1:8000
 ```
@@ -18,7 +20,9 @@ python manage.py runserver 127.0.0.1:8000
 Run `init_receiver` once. It refuses to replace existing credentials. The token
 is saved privately in `runtime/receiver/credentials.json`, not printed or
 committed. The inbox is `runtime/receiver/events.sqlite3`. The directory is 0700
-and files are 0600, owned by the OS user running Django. No migrations are needed.
+and files are 0600, owned by the OS user running Django. `init_web` runs the Django
+account migrations. Read its private initial-login file to sign into the browser.
+Existing milestone-1 credentials need `collector_access import` once after upgrade.
 
 Open **http://127.0.0.1:8000/receiver/** or choose **Event inbox** in the navigation.
 The page stays empty until events arrive. **Refresh inbox** loads the newest
@@ -38,9 +42,8 @@ are no saved records, first follow [local collection](local_collection.md).
 
 Successful delivery prints counts and the `--after-record` value to use with
 the same source for the next batch. On failure, repeat the same command and
-cursor: stable event IDs prevent duplicate storage. Sending is manual in this
-milestone; there is no persistent outgoing queue. Local collector retention can
-remove old records before you send them.
+cursor: stable event IDs prevent duplicate storage. This command sends manually;
+use milestone 2's `forward_events --watch` for persistent queued delivery.
 
 ## API contract
 
@@ -90,7 +93,7 @@ evidence. Only the latest 100 appear in the browser.
 
 ## Deployment boundary
 
-Keep the development server on loopback. Browser pages still have no accounts.
+Keep the development server on loopback. Browser pages require a Django login.
 Use an SSH tunnel as described in the [dashboard guide](django_dashboard.md) for
 remote viewing; do not expose the development server on a public/LAN interface.
 
@@ -100,12 +103,11 @@ requires HTTPS for direct non-loopback requests; the sender allows HTTP only
 to literal loopback IPs. HTTPS uses normal certificate verification, and
 redirects are refused to avoid disclosing collector credentials.
 
-Remote deployment is a later milestone: HTTPS termination, explicit hosts,
-browser access control, proxy trust configuration, per-collector enrollment and
-revocation, rate limits, services, and a delivery/retention policy are still
-needed. The receiver does not trust `X-Forwarded-Proto` yet; a future proxy must
-protect the whole deployment, including browser pages. A future mobile collector
-must filter sensitive notification fields and redact secrets before submission.
+For remote deployment use the HTTPS/proxy configuration, service units and
+per-collector enrollment described in [milestone 2](reliable_delivery.md). By
+default forwarded HTTPS headers are not trusted; only the supplied loopback
+proxy deployment enables this. A future mobile collector must filter sensitive
+notification fields and redact secrets before submission.
 
 ## Files to learn first
 
@@ -119,7 +121,7 @@ command line. Tests use isolated stores with test-only records.
 
 ## Roadmap after this milestone
 
-- Deploy securely on your Linux PC and add reliable queued delivery.
+- Deploy the milestone-2 HTTPS receiver and queued delivery on your Linux PC.
 - Set up Wazuh and forward structured event files through a Wazuh agent.
 - Configure Wazuh decoders, detection rules and investigation views.
 - Verify recovery, retention and complete delivery/alert workflows.

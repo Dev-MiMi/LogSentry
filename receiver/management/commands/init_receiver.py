@@ -3,7 +3,7 @@ import sqlite3
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from receiver.storage import initialize_credentials, open_inbox
+from receiver.storage import initialize_credentials, open_inbox, read_credentials, register_collector
 
 
 class Command(BaseCommand):
@@ -18,6 +18,8 @@ class Command(BaseCommand):
             with open_inbox(settings.LOGSENTRY_RECEIVER_DATABASE):
                 pass
             initialize_credentials(settings.LOGSENTRY_RECEIVER_CREDENTIALS, options["collector_id"])
+            register_collector(settings.LOGSENTRY_RECEIVER_DATABASE,
+                               read_credentials(settings.LOGSENTRY_RECEIVER_CREDENTIALS))
         except (OSError, ValueError, sqlite3.Error) as error:
             raise CommandError(f"Receiver setup failed: {error}") from error
         self.stdout.write(self.style.SUCCESS("Receiver configured."))

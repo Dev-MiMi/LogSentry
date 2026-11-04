@@ -16,6 +16,7 @@ are needed for the engine. The dashboard uses Django 5.2 LTS, installed in
 ```bash
 cd /root/LogSentry
 source .venv/bin/activate
+python manage.py init_web --username admin  # Once, to create the private login.
 python manage.py runserver 127.0.0.1:8000
 ```
 
@@ -24,7 +25,8 @@ lists sources and counts from the local collection database. Select a source
 to inspect its records and supported SSH findings. Without collected data, it
 shows an empty state. All displayed events come from explicitly collected files;
 there is no sample dashboard or demo-data fallback. Times use Nigeria time,
-**WAT (UTC+1)**. User accounts and browser file uploads are not implemented yet. See
+**WAT (UTC+1)**. Sign in using the private `runtime/web/initial-login.json` file
+created by `init_web`. Browser file uploads are not implemented. See
 [the Django walkthrough](docs/django_dashboard.md) for setup and the request flow.
 
 To install the web dependencies on another machine:
@@ -53,8 +55,26 @@ python manage.py send_collected_events --source ubuntu-dpkg --limit 5
 Choose a source actually registered on your installation. The API authenticates
 the collector, validates records and deduplicates retries. Evidence and tokens
 stay in private, ignored `runtime/receiver/` files. This confirms LogSentry
-receipt; **Wazuh forwarding is not connected yet**. Browser pages remain local
-and have no user login. See the [receiver walkthrough](docs/web_receiver.md).
+receipt; **Wazuh forwarding is not connected yet**. See the
+[receiver walkthrough](docs/web_receiver.md).
+
+## Milestone 2: reliable delivery and protected access
+
+Browser pages now require a login. Existing milestone-1 installations should
+run `python manage.py collector_access import` once to register their credential
+in the new revocable registry. Fresh `init_receiver` setups do this automatically.
+
+```bash
+python manage.py configure_forwarder --endpoint http://127.0.0.1:8000/api/v1/events/
+python manage.py forward_events --watch
+```
+
+Keep the local collector running separately. The forwarder copies real saved
+events into a persistent queue, retries outages, and deduplicates redelivery.
+The inbox shows collector contact and pending/error reports. Individual tokens
+can be enrolled or revoked. See [reliable delivery and Ubuntu deployment](docs/reliable_delivery.md)
+for account setup, HTTPS, service files and queue/retention limits. Deployment to
+your PC still requires running those steps on that machine.
 
 ## Collect local Ubuntu/Termux logs
 

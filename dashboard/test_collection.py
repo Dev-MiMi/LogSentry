@@ -6,7 +6,8 @@ import socket
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from django.test import SimpleTestCase, override_settings
+from django.test import TestCase, override_settings
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 
 from logsentry.collection_sources import Source
@@ -18,8 +19,9 @@ FAILURE = "2026-11-01T12:00:00+00:00 ubuntu sshd[12]: Failed password for alice 
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
-class CollectedPagesTests(SimpleTestCase):
+class CollectedPagesTests(TestCase):
     def setUp(self):
+        self.client.force_login(get_user_model().objects.create_user(username="reviewer"))
         folder = TemporaryDirectory()
         self.addCleanup(folder.cleanup)
         self.root = Path(folder.name)

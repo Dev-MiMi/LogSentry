@@ -12,18 +12,19 @@ import uuid
 
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import Client, SimpleTestCase, override_settings
+from django.test import Client, TestCase, override_settings
+from django.contrib.auth import get_user_model
 
 from logsentry.collection_sources import Source
 from logsentry.collection_store import open_store
 from logsentry.collector import collect_source, register_source
 from .serializers import MAX_BODY_BYTES
 from .sending import DeliveryError, NoRedirects, collected_batch, deliver, validate_endpoint
-from .storage import initialize_credentials, open_inbox, read_credentials, save_batch
+from .storage import initialize_credentials, open_inbox, read_credentials, register_collector, save_batch
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"])
-class ReceiverTests(SimpleTestCase):
+class ReceiverTests(TestCase):
     def setUp(self):
         directory = TemporaryDirectory()
         self.addCleanup(directory.cleanup)
@@ -39,6 +40,7 @@ class ReceiverTests(SimpleTestCase):
         config.enable()
         self.addCleanup(config.disable)
         self.client = Client(enforce_csrf_checks=True)
+        self.client.force_login(get_user_model().objects.create_user(username="reviewer"))
         self.event = {
             "event_id": str(uuid.uuid4()), "platform": "android", "source": "selected-app",
             "event_type": "notification", "observed_at": "2026-11-04T12:00:00+01:00",
@@ -48,7 +50,12 @@ class ReceiverTests(SimpleTestCase):
 
     def provision(self):
         initialize_credentials(self.credentials, "my-collector")
+        register_collector(self.database, read_credentials(self.credentials))
         return read_credentials(self.credentials)["token"]
+
+    def assert_no_events(self):
+        with open_inbox(self.database, readonly=True) as db:
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM events").fetchone()[0], 0)
 
     def post(self, token, batch=None, **extra):
         return self.client.post("/api/v1/events/", data=json.dumps(batch or self.batch),
@@ -80,7 +87,7 @@ class ReceiverTests(SimpleTestCase):
             response = self.post(token)
             self.assertEqual(response.status_code, 401)
             self.assertEqual(response.headers["WWW-Authenticate"], "Bearer")
-        self.assertFalse(self.database.exists())
+        self.assert_no_events()
 
     def test_unconfigured_receiver_fails_closed(self):
         self.assertEqual(self.post("some-token").status_code, 503)
@@ -134,7 +141,7 @@ class ReceiverTests(SimpleTestCase):
         for batch in cases:
             with self.subTest(batch=str(batch)[:150]):
                 self.assertEqual(self.post(token, batch).status_code, 400)
-        self.assertFalse(self.database.exists())
+        self.assert_no_events()
 
     def test_body_size_json_and_content_type_limits(self):
         token = self.provision()
@@ -147,14 +154,14 @@ class ReceiverTests(SimpleTestCase):
             response = self.client.post("/api/v1/events/", body, content_type=content_type,
                                         HTTP_AUTHORIZATION=f"Bearer {token}")
             self.assertEqual(response.status_code, code)
-        self.assertFalse(self.database.exists())
+        self.assert_no_events()
 
     def test_cleartext_remote_blocked_https_allowed_and_proxy_header_not_trusted(self):
         token = self.provision()
         for extra in ({}, {"HTTP_X_FORWARDED_PROTO": "https"}):
             response = self.post(token, REMOTE_ADDR="192.0.2.3", **extra)
             self.assertEqual(response.status_code, 403)
-        self.assertFalse(self.database.exists())
+        self.assert_no_events()
         self.assertEqual(self.post(token, REMOTE_ADDR="192.0.2.3", secure=True).status_code, 201)
 
     def test_methods_host_and_query_parameters(self):
@@ -164,7 +171,7 @@ class ReceiverTests(SimpleTestCase):
         self.assertEqual(self.client.post("/receiver/").status_code, 403)  # CSRF-protected page.
         response = self.client.post("/api/v1/events/?token=" + token, data=json.dumps(self.batch), content_type="application/json")
         self.assertEqual(response.status_code, 401)
-        self.assertFalse(self.database.exists())
+        self.assert_no_events()
 
     def test_inbox_escapes_evidence_and_shows_wat_without_credentials(self):
         token = self.provision()
@@ -193,12 +200,13 @@ class ReceiverTests(SimpleTestCase):
         token = self.provision()
         target = self.root / "untouched"
         target.write_text("private evidence")
+        self.database.unlink()
         self.database.symlink_to(target)
-        with self.assertLogs("receiver.views", level="ERROR"):
-            self.assertEqual(self.post(token).status_code, 503)
+        self.assertEqual(self.post(token).status_code, 503)
         self.assertEqual(target.read_text(), "private evidence")
         self.credentials.chmod(0o644)
-        self.assertEqual(self.post(token).status_code, 503)
+        with self.assertRaises(ValueError):
+            read_credentials(self.credentials)
 
     def test_full_inbox_allows_duplicate_retry_but_no_partial_new_batch(self):
         token = self.provision()

@@ -26,6 +26,7 @@ In another terminal:
 ```bash
 cd /root/LogSentry
 source .venv/bin/activate
+python manage.py init_web --username admin  # First run only.
 python manage.py runserver 127.0.0.1:8000
 ```
 
@@ -54,7 +55,8 @@ records, not saved incident tickets.
 
 ## Local access and verification
 
-This development dashboard has no user accounts. Keep
+The dashboard requires a Django login. `init_web` creates the account and a
+private `runtime/web/initial-login.json` handoff file. Keep
 it bound to `127.0.0.1`; the collector and browser view run locally. If Ubuntu is
 on another computer, an SSH tunnel can provide local browser access:
 
@@ -63,15 +65,15 @@ ssh -L 8000:127.0.0.1:8000 your-user@your-server
 ```
 
 Templates escape log content. Browser URLs cannot choose filesystem paths.
-These collection pages use GET/HEAD and read-only database access; storage failures show an
-explicit error rather than fallback data. Django uses a dummy ORM database
-because its own account/models layer has not yet been added; the collector's
-SQLite store is separate.
+These collection pages use GET/HEAD and read-only evidence access; storage
+failures show an explicit error rather than fallback data. Django accounts and
+sessions use `runtime/web/site.sqlite3`; the collector evidence store is separate.
 
 The [event inbox](web_receiver.md) at `/receiver/` displays authenticated
 submissions to `/api/v1/events/` in a separate private store. The POST API
-requires a collector token; browser pages remain local. This is the first
-web-to-Wazuh milestone; forwarding to Wazuh is not connected yet.
+requires a collector token; browser login cannot authorize event submissions.
+[Milestone 2](reliable_delivery.md) adds queued delivery, revocation, status and
+HTTPS deployment files. Forwarding to Wazuh is not connected yet.
 
 To install dependencies on another machine:
 

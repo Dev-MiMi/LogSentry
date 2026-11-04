@@ -21,7 +21,7 @@
       {% if source %}<a href="{% url 'dashboard:collected_source' source.id %}#alerts">Alerts</a>
       <a href="{% url 'dashboard:collected_source' source.id %}#timeline">Logs &amp; events</a>{% endif %}
     </nav>
-    <span class="collection-chip"><span aria-hidden="true"></span>Local collection</span>
+    {% if user.is_authenticated %}<form method="post" action="{% url 'logout' %}" class="logout-form">{% csrf_token %}<button class="button" type="submit">Sign out</button></form>{% endif %}
   </header>
   <main class="workspace">{% block content %}{% endblock %}</main>
   <footer class="site-footer"><span>LogSentry · Linux authentication monitoring</span><span>Collected system logs · Nigeria time · WAT (UTC+1)</span></footer>

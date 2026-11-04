@@ -1,0 +1,21 @@
+[Unit]
+Description=LogSentry authenticated event receiver
+After=network.target
+
+[Service]
+User=logsentry
+Group=logsentry
+WorkingDirectory=/opt/logsentry
+EnvironmentFile=/etc/logsentry/web.env
+ExecStart=/opt/logsentry/.venv/bin/gunicorn logsentry_web.wsgi:application --bind 127.0.0.1:8000 --workers 2 --timeout 30 --access-logfile -
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/logsentry
+
+[Install]
+WantedBy=multi-user.target

@@ -1,6 +1,6 @@
 """Private inbox and collector credentials, separate from local log evidence.
 
-One collector identity is provisioned in this milestone. A committed inbox
+Collector credentials are registered by hash and can be revoked. A committed inbox
 transaction acknowledges receipt only; it does not mean Wazuh has received it.
 """
 
@@ -18,6 +18,15 @@ import stat
 
 IDENTIFIER = r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
 MAX_EVENTS = 10_000
+COLLECTORS_SCHEMA = """CREATE TABLE collectors (
+    collector_id TEXT PRIMARY KEY,
+    token_hash TEXT NOT NULL UNIQUE,
+    revoked INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    last_seen TEXT,
+    pending INTEGER,
+    delivery_error TEXT NOT NULL DEFAULT ''
+)"""
 SCHEMA = """
 CREATE TABLE events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,6 +47,10 @@ class EventConflict(Exception):
 
 class InboxFull(Exception):
     """Reject new records rather than silently discarding unforwarded evidence."""
+
+
+class CollectorRevoked(PermissionError):
+    """A credential was revoked between request authentication and storage."""
 
 
 def check_private(path, *, directory=False):
@@ -106,7 +119,11 @@ def open_inbox(path, *, readonly=False):
             for statement in SCHEMA.split(";"):
                 if statement.strip():
                     db.execute(statement)
-        elif version != 1:
+            version = 1
+        if version == 1 and not readonly:
+            db.execute(COLLECTORS_SCHEMA)
+            db.execute("PRAGMA user_version = 2")
+        elif version not in (1, 2):
             raise ValueError("Unsupported inbox version.")
         if not readonly:
             db.commit()
@@ -115,12 +132,17 @@ def open_inbox(path, *, readonly=False):
         db.close()
 
 
-def save_batch(path, collector_id, events):
+def save_batch(path, collector_id, events, *, token_hash=None):
     """Accept the whole validated batch or none; make retries idempotent."""
     received_at = datetime.now(timezone.utc).isoformat()
     accepted = duplicates = 0
     with open_inbox(path) as db, db:
         db.execute("BEGIN IMMEDIATE")
+        if token_hash is not None:
+            row = db.execute("SELECT revoked FROM collectors WHERE collector_id=? AND token_hash=?",
+                             (collector_id, token_hash)).fetchone()
+            if not row or row["revoked"]:
+                raise CollectorRevoked("Collector access revoked.")
         count = db.execute("SELECT COUNT(*) FROM events").fetchone()[0]
         for event in events:
             payload = json.dumps(event, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
@@ -142,6 +164,7 @@ def save_batch(path, collector_id, events):
                 (collector_id, event["event_id"], payload, digest, received_at),
             )
             accepted += 1
+        db.execute("UPDATE collectors SET last_seen=? WHERE collector_id=?", (received_at, collector_id))
     return {"accepted": accepted, "duplicates": duplicates}
 
 
@@ -153,3 +176,41 @@ def inbox_summary(path):
         rows = db.execute("SELECT * FROM events ORDER BY id DESC LIMIT 100").fetchall()
     return total, [{**json.loads(row["payload"]), "collector_id": row["collector_id"],
                     "received_at": row["received_at"]} for row in rows]
+
+
+def register_collector(path, credentials):
+    with open_inbox(path) as db, db:
+        db.execute("INSERT INTO collectors(collector_id, token_hash, created_at) VALUES (?, ?, ?)",
+                   (credentials["collector_id"], hashlib.sha256(credentials["token"].encode()).hexdigest(),
+                    datetime.now(timezone.utc).isoformat()))
+
+
+def authenticate_collector(path, token):
+    digest = hashlib.sha256(token).hexdigest()
+    with open_inbox(path, readonly=True) as db:
+        row = db.execute("SELECT collector_id FROM collectors WHERE token_hash=? AND revoked=0", (digest,)).fetchone()
+    return (row["collector_id"], digest) if row else None
+
+
+def revoke_collector(path, collector_id):
+    with open_inbox(path) as db, db:
+        if not db.execute("UPDATE collectors SET revoked=1 WHERE collector_id=?", (collector_id,)).rowcount:
+            raise ValueError("Collector not found.")
+
+
+def collector_status(path):
+    with open_inbox(path, readonly=True) as db:
+        # Never expose token hashes through the browser.
+        return [dict(row) for row in db.execute(
+            "SELECT collector_id, revoked, last_seen, pending, delivery_error FROM collectors ORDER BY collector_id")]
+
+
+def record_heartbeat(path, collector_id, token_hash, pending, delivery_error):
+    with open_inbox(path) as db, db:
+        changed = db.execute(
+            "UPDATE collectors SET last_seen=?, pending=?, delivery_error=? "
+            "WHERE collector_id=? AND token_hash=? AND revoked=0",
+            (datetime.now(timezone.utc).isoformat(), pending, delivery_error, collector_id, token_hash),
+        ).rowcount
+        if not changed:
+            raise CollectorRevoked("Collector access revoked.")

@@ -3,13 +3,16 @@
 import ipaddress
 import logging
 import sqlite3
+from datetime import datetime, timezone
 
 from django.conf import settings
+from django.contrib.auth.decorators import login_not_required
 from django.shortcuts import render
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_safe
-from rest_framework.exceptions import APIException, ParseError, PermissionDenied
+from rest_framework.exceptions import APIException, AuthenticationFailed, ParseError, PermissionDenied
+from rest_framework import serializers
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -18,7 +21,8 @@ from rest_framework.views import APIView
 from logsentry.reporting import _safe_text
 from .authentication import CollectorAuthentication
 from .serializers import BatchSerializer, MAX_BODY_BYTES
-from .storage import EventConflict, InboxFull, inbox_summary, read_credentials, save_batch
+from .storage import CollectorRevoked, EventConflict, InboxFull, collector_status, inbox_summary, record_heartbeat, save_batch
+from .outbox import summary as outbox_summary
 
 
 logger = logging.getLogger(__name__)
@@ -44,6 +48,7 @@ class BoundedJSONParser(JSONParser):
 
 
 @method_decorator(never_cache, name="dispatch")
+@method_decorator(login_not_required, name="dispatch")
 class ReceiveEvents(APIView):
     authentication_classes = [CollectorAuthentication]
     permission_classes = [IsAuthenticated]
@@ -65,11 +70,15 @@ class ReceiveEvents(APIView):
         batch.is_valid(raise_exception=True)
         try:
             result = save_batch(settings.LOGSENTRY_RECEIVER_DATABASE,
-                                request.user.collector_id, batch.validated_data["events"])
+                                request.user.collector_id, batch.validated_data["events"],
+                                token_hash=request.user.token_hash)
         except EventConflict:
             return Response({"detail": "Event ID already exists with different contents. No events accepted."}, status=409)
         except InboxFull:
             return Response({"detail": "Inbox full. No events accepted; retain this batch at the collector."}, status=507)
+        except CollectorRevoked:
+            # Revocation may race with a request already authenticated.
+            raise AuthenticationFailed("Collector access revoked.")
         except (OSError, ValueError, sqlite3.Error):
             logger.error("Receiver could not save a batch; inspect local storage configuration.")
             return Response({"detail": "Event storage unavailable. Retry with the same event IDs."}, status=503)
@@ -82,9 +91,14 @@ class ReceiveEvents(APIView):
 def inbox(request):
     context = {"receiver_page": True, "configured": False, "events": [], "total": 0}
     try:
-        credentials = read_credentials(settings.LOGSENTRY_RECEIVER_CREDENTIALS)
-        context.update(configured=True, collector_id=credentials["collector_id"])
-    except (OSError, ValueError):
+        context["collectors"] = collector_status(settings.LOGSENTRY_RECEIVER_DATABASE)
+        context["configured"] = any(not row["revoked"] for row in context["collectors"])
+        for row in context["collectors"]:
+            row["contact_state"] = "No contact yet"
+            if row["last_seen"]:
+                age = (datetime.now(timezone.utc) - datetime.fromisoformat(row["last_seen"])).total_seconds()
+                row["contact_state"] = "Seen recently" if age <= 30 else "Contact is stale"
+    except (OSError, ValueError, sqlite3.Error):
         pass
     try:
         context["total"], context["events"] = inbox_summary(settings.LOGSENTRY_RECEIVER_DATABASE)
@@ -95,4 +109,29 @@ def inbox(request):
         return render(request, "receiver/inbox.html", context, status=503)
     for event in context["events"]:
         event["message"] = _safe_text(event["message"])
+    try:
+        context["outbox"] = outbox_summary(settings.LOGSENTRY_OUTBOX_DATABASE)
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError, sqlite3.Error):
+        context["outbox_error"] = True
     return render(request, "receiver/inbox.html", context)
+
+
+class HeartbeatSerializer(serializers.Serializer):
+    pending = serializers.IntegerField(min_value=0, max_value=100_000)
+    delivery_error = serializers.CharField(max_length=256, allow_blank=True, trim_whitespace=False)
+
+
+class Heartbeat(ReceiveEvents):
+    def post(self, request):
+        data = HeartbeatSerializer(data=request.data)
+        data.is_valid(raise_exception=True)
+        try:
+            record_heartbeat(settings.LOGSENTRY_RECEIVER_DATABASE, request.user.collector_id,
+                             request.user.token_hash, **data.validated_data)
+        except CollectorRevoked:
+            raise AuthenticationFailed("Collector access revoked.")
+        except (OSError, ValueError, sqlite3.Error):
+            return Response({"detail": "Status storage unavailable."}, status=503)
+        return Response({"status": "recorded"})

@@ -6,6 +6,8 @@ import json
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPSHandler
+import ssl
 import uuid
 
 from logsentry.collection_store import open_store
@@ -41,6 +43,20 @@ def validate_endpoint(endpoint):
     return endpoint
 
 
+def event_from_record(source, record, collector_id):
+    identity = json.dumps([collector_id, source["name"], record["id"],
+                           record["received_at"], record["raw_line"]])
+    return {
+        "event_id": str(uuid.uuid5(uuid.NAMESPACE_URL, hashlib.sha256(identity.encode()).hexdigest())),
+        "platform": "termux" if source["name"].startswith("termux-") else "linux",
+        "source": source["name"], "event_type": record["event_type"] or "unparsed",
+        "observed_at": (record["timestamp"] or record["received_at"])
+        if source["format"] == "sshd_capture" else record["received_at"],
+        "occurred_at": None if source["format"] == "sshd_capture" else record["timestamp"],
+        "message": record["raw_line"],
+    }
+
+
 def collected_batch(database, credentials, source_name, *, after_record=0, limit=100):
     """Read a stable snapshot. Original evidence and collector offsets are untouched."""
     with open_store(database, readonly=True) as db:
@@ -52,43 +68,32 @@ def collected_batch(database, credentials, source_name, *, after_record=0, limit
             "SELECT * FROM records WHERE source_id=? AND id>? ORDER BY id LIMIT ?",
             (source["id"], after_record, limit),
         ).fetchall()
-    events = []
-    for record in records:
-        # Include original receipt time/content to distinguish reset databases.
-        identity = json.dumps([credentials["collector_id"], source["name"], record["id"],
-                               record["received_at"], record["raw_line"]])
-        event_id = str(uuid.uuid5(uuid.NAMESPACE_URL, hashlib.sha256(identity.encode()).hexdigest()))
-        events.append({
-            "event_id": event_id,
-            "platform": "termux" if source["name"].startswith("termux-") else "linux",
-            "source": source["name"],
-            "event_type": record["event_type"] or "unparsed",
-            "observed_at": (record["timestamp"] or record["received_at"])
-            if source["format"] == "sshd_capture" else record["received_at"],
-            # Direct sshd output supplies observation time, not occurrence time.
-            "occurred_at": None if source["format"] == "sshd_capture" else record["timestamp"],
-            "message": record["raw_line"],
-        })
+    events = [event_from_record(source, record, credentials["collector_id"]) for record in records]
     return {"schema_version": 1, "events": events}, records[-1]["id"] if records else after_record
 
 
-def deliver(endpoint, token, batch):
-    endpoint = validate_endpoint(endpoint)
-    body = json.dumps(batch).encode("utf-8")
+def request_json(endpoint, token, payload, *, ca_file=None):
+    body = json.dumps(payload).encode("utf-8")
     if len(body) > MAX_BODY_BYTES:
         raise DeliveryError("Batch exceeds 256 KiB. Reduce --limit.")
     request = Request(endpoint, data=body, method="POST", headers={
         "Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "application/json",
     })
     try:
-        with build_opener(NoRedirects()).open(request, timeout=15) as response:
-            status = response.status
-            result = json.loads(response.read(4096))
+        handlers = [NoRedirects()]
+        if ca_file:
+            handlers.append(HTTPSHandler(context=ssl.create_default_context(cafile=str(ca_file))))
+        with build_opener(*handlers).open(request, timeout=15) as response:
+            return response.status, json.loads(response.read(4096))
     except HTTPError as error:
-        # Don't echo untrusted response bodies or request headers (token).
-        raise DeliveryError(f"Receiver returned HTTP {error.code}. Nothing acknowledged; keep the same cursor.") from error
-    except (URLError, OSError, ValueError) as error:
-        raise DeliveryError("Delivery was not acknowledged. Retry with the same cursor and event IDs.") from error
+        raise DeliveryError(f"Receiver returned HTTP {error.code}. Delivery not acknowledged.") from error
+    except (URLError, OSError, ValueError, RecursionError) as error:
+        raise DeliveryError("Delivery was not acknowledged. Queued events can be retried with the same IDs.") from error
+
+
+def deliver(endpoint, token, batch, *, ca_file=None):
+    endpoint = validate_endpoint(endpoint)
+    status, result = request_json(endpoint, token, batch, ca_file=ca_file)
     if (status not in (200, 201) or not isinstance(result, dict)
             or result.get("status") != "stored" or result.get("schema_version") != 1
             or type(result.get("accepted")) is not int or type(result.get("duplicates")) is not int
@@ -96,3 +101,10 @@ def deliver(endpoint, token, batch):
             or result["accepted"] + result["duplicates"] != len(batch["events"])):
         raise DeliveryError("Invalid receipt. Retry with the same cursor and event IDs.")
     return result
+
+
+def heartbeat(endpoint, token, pending, error, *, ca_file=None):
+    endpoint = validate_endpoint(endpoint).removesuffix("events/") + "heartbeat/"
+    status, result = request_json(endpoint, token, {"pending": pending, "delivery_error": error[:256]}, ca_file=ca_file)
+    if status != 200 or result != {"status": "recorded"}:
+        raise DeliveryError("Heartbeat was not acknowledged.")
