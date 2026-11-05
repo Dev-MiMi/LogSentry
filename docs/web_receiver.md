@@ -3,7 +3,8 @@
 This guide describes the event contract introduced in milestone 1. The current
 implementation also includes [milestone 2](reliable_delivery.md): browser login,
 multiple revocable collector identities, offline queues and HTTPS deployment.
-No fictional data is loaded at startup; Wazuh forwarding remains future work.
+No fictional data is loaded at startup. [Milestone 3](wazuh_integration.md) exports
+these events for Wazuh; manager receipt is verified separately on the PC.
 
 ## Run it
 
@@ -122,7 +123,7 @@ command line. Tests use isolated stores with test-only records.
 ## Roadmap after this milestone
 
 - Deploy the milestone-2 HTTPS receiver and queued delivery on your Linux PC.
-- Set up Wazuh and forward structured event files through a Wazuh agent.
+- Apply the [Wazuh file handoff](wazuh_integration.md) and verify manager arrival.
 - Configure Wazuh decoders, detection rules and investigation views.
 - Verify recovery, retention and complete delivery/alert workflows.
 - Add the Android collector, with actual collection coverage tested on the phone.

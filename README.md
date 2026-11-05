@@ -55,7 +55,7 @@ python manage.py send_collected_events --source ubuntu-dpkg --limit 5
 Choose a source actually registered on your installation. The API authenticates
 the collector, validates records and deduplicates retries. Evidence and tokens
 stay in private, ignored `runtime/receiver/` files. This confirms LogSentry
-receipt; **Wazuh forwarding is not connected yet**. See the
+receipt; manager arrival requires the Wazuh integration below. See the
 [receiver walkthrough](docs/web_receiver.md).
 
 ## Milestone 2: reliable delivery and protected access
@@ -75,6 +75,25 @@ The inbox shows collector contact and pending/error reports. Individual tokens
 can be enrolled or revoked. See [reliable delivery and Ubuntu deployment](docs/reliable_delivery.md)
 for account setup, HTTPS, service files and queue/retention limits. Deployment to
 your PC still requires running those steps on that machine.
+
+## Milestone 3: Wazuh integration
+
+```bash
+python manage.py wazuh_status --localfile
+python manage.py export_wazuh --watch
+```
+
+The first command prints Wazuh's file-reader configuration for this installation.
+Apply it on the receiver host's Wazuh manager (same PC) or enrolled Wazuh agent
+(separate receiver), then start exporting. The exporter writes received events
+as JSON lines to `runtime/wazuh/events.jsonl`, with a recoverable checkpoint.
+The inbox shows export progress separately from manager verification. Run
+`python manage.py wazuh_status` for command-line status.
+
+Local export is implemented; receipt by your installed manager must be verified
+on the PC. See [Wazuh setup and verification](docs/wazuh_integration.md) for service
+configuration, archive matching, read permissions, and storage/replay limits.
+Custom Wazuh detection rules remain milestone 4; Android collection stays at 6.
 
 ## Collect local Ubuntu/Termux logs
 

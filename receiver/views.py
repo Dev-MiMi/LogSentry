@@ -23,6 +23,7 @@ from .authentication import CollectorAuthentication
 from .serializers import BatchSerializer, MAX_BODY_BYTES
 from .storage import CollectorRevoked, EventConflict, InboxFull, collector_status, inbox_summary, record_heartbeat, save_batch
 from .outbox import summary as outbox_summary
+from .wazuh_export import ExportError, export_status
 
 
 logger = logging.getLogger(__name__)
@@ -115,6 +116,15 @@ def inbox(request):
         pass
     except (OSError, ValueError, sqlite3.Error):
         context["outbox_error"] = True
+    try:
+        context["wazuh"] = export_status(settings.LOGSENTRY_WAZUH_DIRECTORY, settings.LOGSENTRY_RECEIVER_DATABASE)
+        checked = context["wazuh"]["last_checked"]
+        context["wazuh"]["stale"] = not checked or (
+            datetime.now(timezone.utc) - datetime.fromisoformat(checked)).total_seconds() > 15
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError, sqlite3.Error, ExportError):
+        context["wazuh_error"] = True
     return render(request, "receiver/inbox.html", context)
 
 

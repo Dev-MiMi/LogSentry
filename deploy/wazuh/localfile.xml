@@ -1,0 +1,8 @@
+<!-- Insert INSIDE an existing ossec_config element on the receiver host.
+     Use the manager when colocated, otherwise its enrolled Wazuh agent.
+     Generate the actual path with the wazuh_status localfile option. -->
+<localfile>
+  <location>/var/lib/logsentry/wazuh/events.jsonl</location>
+  <log_format>json</log_format>
+  <only-future-events max-size="128MB">no</only-future-events>
+</localfile>

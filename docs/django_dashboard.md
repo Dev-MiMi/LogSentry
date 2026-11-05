@@ -73,7 +73,9 @@ The [event inbox](web_receiver.md) at `/receiver/` displays authenticated
 submissions to `/api/v1/events/` in a separate private store. The POST API
 requires a collector token; browser login cannot authorize event submissions.
 [Milestone 2](reliable_delivery.md) adds queued delivery, revocation, status and
-HTTPS deployment files. Forwarding to Wazuh is not connected yet.
+HTTPS deployment files. [Milestone 3](wazuh_integration.md) adds local Wazuh export
+and separate manager-evidence verification status. Apply its file-reader
+configuration on your Wazuh host to complete the connection.
 
 To install dependencies on another machine:
 

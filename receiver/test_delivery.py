@@ -38,7 +38,8 @@ class DeliveryTests(TestCase):
         with open_store(self.collection) as db:
             self.source_id = register_source(db, Source("service", self.log, "text", 2026))
             collect_source(db, self.source_id)
-        config = override_settings(LOGSENTRY_RECEIVER_DATABASE=self.inbox, LOGSENTRY_OUTBOX_DATABASE=self.outbox)
+        config = override_settings(LOGSENTRY_RECEIVER_DATABASE=self.inbox, LOGSENTRY_OUTBOX_DATABASE=self.outbox,
+                                   LOGSENTRY_WAZUH_DIRECTORY=self.root / "wazuh")
         config.enable()
         self.addCleanup(config.disable)
         self.now = datetime.now(timezone.utc)

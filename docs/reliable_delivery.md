@@ -5,8 +5,8 @@ registered by hash; revoking one token leaves other collectors and stored eviden
 intact. The sender copies evidence into a private persistent outbox and removes
 it only after receiving an acknowledgement from LogSentry.
 
-Wazuh forwarding is still milestone 3. This delivery receipt means the LogSentry
-receiver saved the records, not that Wazuh analysed them.
+[Milestone 3](wazuh_integration.md) adds the Wazuh file handoff. This delivery
+receipt means the LogSentry receiver saved the records, not that Wazuh analysed them.
 
 ## Upgrade the existing local installation
 
@@ -109,7 +109,8 @@ The manual sender is still available for inspection and small deliveries.
   source logs/archives and size retention for your workload. This is not an
   unlimited or lossless logging system.
 - The receiver's current 10,000-event capacity still applies. HTTP 507 keeps
-  evidence queued. Forwarding/retention in milestone 3 will address ongoing volume.
+  evidence queued. Milestone 3 exports without deleting receiver evidence;
+  verified archival/retention is still required for ongoing volume.
 - The forwarder sends a credential-authenticated heartbeat after delivery (or
   when idle). Reported pending counts/errors are collector claims and become stale
   while disconnected. They are never interpreted as proof of a security incident.
@@ -194,7 +195,8 @@ The supplied proxy sends no HTTP application traffic; HTTPS uses secure cookies.
 
 Automated checks: `python manage.py test receiver dashboard` and
 `python -m unittest discover -s tests`. See [milestone 1](web_receiver.md) for the
-event contract. Android app collection and Wazuh forwarding remain later work.
+event contract and [Wazuh integration](wazuh_integration.md) for the next handoff.
+Android app collection remains milestone 6.
 
 ## Verification performed during implementation
 

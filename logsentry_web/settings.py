@@ -95,6 +95,7 @@ LOGSENTRY_RECEIVER_DATABASE = RUNTIME_DIR / "receiver" / "events.sqlite3"
 LOGSENTRY_RECEIVER_CREDENTIALS = RUNTIME_DIR / "receiver" / "credentials.json"
 LOGSENTRY_FORWARDER_CONFIG = RUNTIME_DIR / "forwarder" / "config.json"
 LOGSENTRY_OUTBOX_DATABASE = RUNTIME_DIR / "forwarder" / "outbox.sqlite3"
+LOGSENTRY_WAZUH_DIRECTORY = RUNTIME_DIR / "wazuh"
 REST_FRAMEWORK = {
     "UNAUTHENTICATED_USER": None,  # No Django accounts or session authentication.
     "DEFAULT_AUTHENTICATION_CLASSES": [],

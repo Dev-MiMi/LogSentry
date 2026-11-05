@@ -36,6 +36,7 @@ class ReceiverTests(TestCase):
             LOGSENTRY_RECEIVER_DATABASE=self.database,
             LOGSENTRY_RECEIVER_CREDENTIALS=self.credentials,
             LOGSENTRY_COLLECTION_DATABASE=self.collection,
+            LOGSENTRY_WAZUH_DIRECTORY=self.root / "wazuh",
         )
         config.enable()
         self.addCleanup(config.disable)

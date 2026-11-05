@@ -19,15 +19,26 @@
 <div class="table-scroll"><table><thead><tr><th>Collector</th><th>Access</th><th>Last contact · WAT</th><th>Reported pending</th><th>Reported status</th></tr></thead><tbody>
 {% for collector in collectors %}<tr><td>{{ collector.collector_id }}</td><td>{% if collector.revoked %}Revoked{% else %}Active{% endif %}</td><td>{{ collector.last_seen|readable_timestamp }}</td><td>{{ collector.pending|default_if_none:'Unknown' }}</td><td>{{ collector.contact_state }}{% if collector.delivery_error %} · {{ collector.delivery_error }}{% endif %}</td></tr>
 {% empty %}<tr><td colspan="5" class="empty-state">No collectors registered.</td></tr>{% endfor %}
-</tbody></table></div><p class="panel-footnote">Pending counts and errors are the last collector report, not a live connection guarantee. Offline reports may be stale. Wazuh is not connected.</p></section>
+</tbody></table></div><p class="panel-footnote">Pending counts and errors are the last collector report, not a live connection guarantee. Offline reports may be stale. These counts describe delivery to LogSentry.</p></section>
 {% if outbox %}<section class="panel"><div class="panel-heading"><h2>Local delivery queue</h2><span>{{ outbox.pending }} pending · {{ outbox.quarantined }} need review</span></div>
 <div class="reason"><p>Last attempt: {{ outbox.last_attempt|readable_timestamp }}<br>Last receiver contact: {{ outbox.last_success|readable_timestamp }}</p>
 <p>{{ outbox.error|default:'No delivery error recorded.' }}</p>{% for warning in outbox.warnings %}<p class="text-orange">{{ warning }}</p>{% endfor %}</div></section>
 {% elif outbox_error %}<aside class="notice">Local delivery status could not be loaded.</aside>{% endif %}
+<section class="panel"><div class="panel-heading"><h2>Wazuh export</h2><span>{% if wazuh %}{{ wazuh.exported }} exported · {{ wazuh.pending }} pending{% else %}Not started{% endif %}</span></div>
+{% if wazuh_error %}<p class="notice" role="alert">Wazuh export status could not be loaded.</p>
+{% elif wazuh %}<div class="reason">
+<p>Last export check: {{ wazuh.last_checked|readable_timestamp }}{% if wazuh.stale %} · Check is stale; exporter may be stopped{% endif %}<br>
+Last record exported: {{ wazuh.last_record }}<br>Last export: {{ wazuh.last_exported|readable_timestamp }}</p>
+{% if wazuh.error %}<p class="text-orange" role="alert">{{ wazuh.error }}</p>{% endif %}
+{% if wazuh.verified_record %}<p>Record {{ wazuh.verified_record }} matched a supplied Wazuh archive at {{ wazuh.verified_at|readable_timestamp }}. This check applies only to that record.</p>
+{% else %}<p>Manager receipt has not been verified.</p>{% endif %}
+</div>{% else %}<p class="reason">Wazuh forwarding is not connected yet. Start the exporter and configure Wazuh to read its event file.</p>{% endif %}
+<p class="panel-footnote">Exported means saved to the local JSON file. It does not confirm Wazuh receipt, indexing or an alert. Receiver evidence is retained; no records are automatically deleted after export.</p>
+</section>
 </div>
 <section class="panel">
   <div class="panel-heading"><h2>Received events</h2><span class="count-chip">{{ total }} stored · {{ events|length }} shown</span></div>
-  <p class="panel-footnote">Wazuh forwarding is not connected yet. These are collector reports; receiving an event does not verify its contents or indicate a security incident. App activity alone does not prove a login.</p>
+  <p class="panel-footnote">These are collector reports; receiving an event does not verify its contents or indicate a security incident. App activity alone does not prove a login.</p>
   <ol class="evidence-list">
     {% for event in events %}<li>
       <div class="evidence-meta"><span>{{ event.source }}</span><span>{{ event.event_type }}</span><span>{{ event.platform }}</span></div>
