@@ -103,6 +103,14 @@ See [Wazuh setup and verification](docs/wazuh_integration.md) for other hosts an
 storage/replay limits. [Roadmap](docs/roadmap.md): milestones 1–3 complete for the
 local lab; custom Wazuh rules are milestone 4, hardening 5 and Android collection 6.
 
+Milestone 4 now includes [Wazuh rules and investigation tools](docs/wazuh_detection.md).
+It indexes routine activity at informational level and detects recognized SSH
+failures, repeated failures, possible brute force and successes after failures.
+Open an inbox record to inspect its evidence and copy its Wazuh search. Rules
+must be installed and verified on the manager PC before dashboard alerting is
+considered complete; the guide includes isolated Wazuh scenarios and an exact
+`verify_wazuh_alert` command.
+
 ## Collect local Ubuntu/Termux logs
 
 ```bash

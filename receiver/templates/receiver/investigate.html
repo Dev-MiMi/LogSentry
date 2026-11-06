@@ -1,0 +1,25 @@
+{% extends 'dashboard/base.html' %}
+{% load display_time %}
+{% block title %}Investigate event{% endblock %}
+{% block content %}
+{% if storage_error %}<aside class="notice" role="alert">Evidence is unavailable. Check receiver storage.</aside>{% else %}
+<div class="page-heading"><div><p class="eyebrow">RECEIVER EVIDENCE</p><h1>Record {{ event.record_id }}</h1>
+<p class="subtitle">{{ event.collector_id }} · {{ event.source }} · {{ event.event_type }}</p></div>
+<a class="button" href="{% url 'receiver:inbox' %}">Back to inbox</a></div>
+<section class="panel"><div class="panel-heading"><h2>Original evidence</h2></div><div class="reason">
+<p>Event time: {{ event.occurred_at|readable_timestamp }}<br>Observed: {{ event.observed_at|readable_timestamp }}<br>Received: {{ event.received_at|readable_timestamp }}</p>
+<pre><code>{{ event.message }}</code></pre>
+<p>Event ID: {{ event.event_id }}<br>Payload SHA-256: {{ event.payload_sha256 }}</p>
+<p>The hash checks the received payload; it does not attest that the collector's report is true.</p></div></section>
+{% if event.ssh %}<section class="panel"><div class="panel-heading"><h2>Parsed SSH details</h2></div><div class="reason">
+<p>Host: {{ event.ssh.hostname }}<br>Source IP: {{ event.ssh.source_ip }}<br>Username: {{ event.ssh.username }}<br>Method: {{ event.ssh.method }}<br>Time basis: {{ event.ssh.time_basis }}</p>
+<p>These fields are derived from the retained message. Exports made before SSH enrichment was added remain unchanged and may not contain these fields.</p></div></section>{% endif %}
+<section class="panel"><div class="panel-heading"><h2>Find this event in Wazuh</h2></div><div class="reason">
+<pre><code>rule.groups: logsentry AND data.logsentry.collector_id: "{{ event.collector_id }}" AND data.logsentry.event_id: "{{ event.event_id }}"</code></pre>
+<p>Paste this into Wazuh Threat hunting. Widen the time range to include delivery time. A missing result may mean the rules are not installed, the event predates installation, or indexing is incomplete.</p>
+<p>Check nearby events from this collector and source. For a correlated finding, compare the supporting messages and original timestamps. Wazuh's processing window includes time spent delivering a backlog.</p></div></section>
+<section class="panel"><div class="panel-heading"><h2>Relevant rules</h2><span>Guidance, not confirmed Wazuh alerts</span></div><div class="reason">
+{% for rule in rules %}<p><strong>{{ rule.id }} · {{ rule.title }} · {{ rule.severity }}</strong><br>{{ rule.guidance }}</p>{% endfor %}
+<a href="{% url 'receiver:wazuh_rules' %}">All Wazuh rules</a></div></section>
+{% endif %}
+{% endblock %}

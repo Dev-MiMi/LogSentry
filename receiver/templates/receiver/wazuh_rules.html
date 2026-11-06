@@ -1,0 +1,19 @@
+{% extends 'dashboard/base.html' %}
+{% block title %}Wazuh investigations{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="eyebrow">WAZUH INTEGRATION</p><h1>Rules and investigations</h1>
+<p class="subtitle">These rules become active when installed on your Wazuh manager.</p></div></div>
+<section class="panel"><div class="reason">
+<p>In Wazuh Threat hunting, select <code>wazuh-alerts-*</code> and search <code>rule.groups: logsentry</code>. Set the time range to include when Wazuh processed the event.</p>
+<p>Security findings: <code>rule.groups: logsentry_security</code>. Routine activity: <code>rule.groups: logsentry AND rule.level: 3</code>. Level 3 records are informational context, even though Wazuh stores them in its alerts index.</p>
+<p>Useful columns: <code>rule.description</code>, <code>rule.level</code>, <code>data.logsentry.collector_id</code>, <code>data.logsentry.source</code>, <code>data.logsentry.ssh.source_ip</code>, <code>data.logsentry.ssh.username</code>, <code>data.logsentry.record_id</code>.</p>
+<p>Set the Wazuh dashboard timezone to <code>Africa/Lagos</code>. LogSentry already displays Nigeria time.</p>
+</div></section>
+<section class="panel"><div class="panel-heading"><h2>Rule catalogue</h2></div><div class="table-scroll">
+<table><thead><tr><th>Rule</th><th>Level / priority</th><th>Finding</th><th>Investigation</th></tr></thead><tbody>
+{% for rule in rules %}<tr><td>{{ rule.id }}</td><td>{{ rule.level }} / {{ rule.severity }}</td><td>{{ rule.title }}</td><td>{{ rule.guidance }}</td></tr>{% endfor %}
+</tbody></table></div></section>
+<aside class="notice">Repeated-failure rules use Wazuh processing time. Offline deliveries may arrive together even if the events happened hours apart. Compare original times, collector identity and distinct event IDs. Findings are leads for investigation.</aside>
+<section class="panel"><div class="reason"><p>These pages show retained evidence and rule guidance. To confirm an alert, check Wazuh itself or use the exact alert verification command on a private copy of <code>alerts.json</code>. Export status alone does not prove alerting or dashboard indexing.</p>
+<p>Detection is scoped to the same collector, source, host and IP. Success after failures also requires the same username. Unknown usernames and failed-password messages are not counted twice. Rules do not learn personal schedules, assume a trusted network, or infer a banking-app login from a notification.</p></div></section>
+{% endblock %}

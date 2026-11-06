@@ -34,6 +34,7 @@ Last record exported: {{ wazuh.last_record }}<br>Last export: {{ wazuh.last_expo
 {% else %}<p>Manager receipt has not been verified.</p>{% endif %}
 </div>{% else %}<p class="reason">Wazuh forwarding is not connected yet. Start the exporter and configure Wazuh to read its event file.</p>{% endif %}
 <p class="panel-footnote">Exported means saved to the local JSON file. It does not confirm Wazuh receipt, indexing or an alert. Receiver evidence is retained; no records are automatically deleted after export.</p>
+<p class="reason"><a href="{% url 'receiver:wazuh_rules' %}">Wazuh rules and investigation guide</a></p>
 </section>
 </div>
 <section class="panel">
@@ -48,6 +49,7 @@ Last record exported: {{ wazuh.last_record }}<br>Last export: {{ wazuh.last_expo
       Received here: {{ event.received_at|readable_timestamp }}</p>
       <pre><code>{{ event.message }}</code></pre>
       <p class="subtitle">Event ID: {{ event.event_id }}</p>
+      <a href="{% url 'receiver:investigate' event.record_id %}">Investigate record {{ event.record_id }}</a>
     </li>{% empty %}<li class="empty-state">No events received yet. Send records from a configured collector to populate this inbox.</li>{% endfor %}
   </ol>
   <p class="panel-footnote">Newest received first, up to 100 displayed. The inbox holds at most 10,000 events and rejects new events when full; it never silently removes unforwarded records.</p>

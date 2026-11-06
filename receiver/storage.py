@@ -174,7 +174,7 @@ def inbox_summary(path):
         db.execute("BEGIN")
         total = db.execute("SELECT COUNT(*) FROM events").fetchone()[0]
         rows = db.execute("SELECT * FROM events ORDER BY id DESC LIMIT 100").fetchall()
-    return total, [{**json.loads(row["payload"]), "collector_id": row["collector_id"],
+    return total, [{**json.loads(row["payload"]), "record_id": row["id"], "collector_id": row["collector_id"],
                     "received_at": row["received_at"]} for row in rows]
 
 

@@ -1,4 +1,4 @@
-"""Local web inbox and authenticated POST endpoint; Wazuh delivery comes later."""
+"""Authenticated collector inbox and evidence investigation pages."""
 
 import ipaddress
 import logging
@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_not_required
+from django.http import Http404
 from django.shortcuts import render
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import never_cache
@@ -21,9 +22,10 @@ from rest_framework.views import APIView
 from logsentry.reporting import _safe_text
 from .authentication import CollectorAuthentication
 from .serializers import BatchSerializer, MAX_BODY_BYTES
-from .storage import CollectorRevoked, EventConflict, InboxFull, collector_status, inbox_summary, record_heartbeat, save_batch
+from .storage import CollectorRevoked, EventConflict, InboxFull, collector_status, inbox_summary, open_inbox, record_heartbeat, save_batch
 from .outbox import summary as outbox_summary
-from .wazuh_export import ExportError, export_status
+from .wazuh_export import ExportError, event_document, export_status
+from .wazuh_rules import event_rules, rule_catalogue
 
 
 logger = logging.getLogger(__name__)
@@ -126,6 +128,35 @@ def inbox(request):
     except (OSError, ValueError, sqlite3.Error, ExportError):
         context["wazuh_error"] = True
     return render(request, "receiver/inbox.html", context)
+
+
+@never_cache
+@require_safe
+def wazuh_rules(request):
+    return render(request, "receiver/wazuh_rules.html", {
+        "receiver_page": True, "rules": rule_catalogue(),
+    })
+
+
+@never_cache
+@require_safe
+def investigate(request, record_id):
+    context = {"receiver_page": True}
+    try:
+        with open_inbox(settings.LOGSENTRY_RECEIVER_DATABASE, readonly=True) as db:
+            row = db.execute("SELECT * FROM events WHERE id=?", (record_id,)).fetchone()
+        if row is None:
+            raise Http404("Event not found.")
+        document = event_document(row)
+        context["event"] = document["logsentry"]
+        context["rules"] = event_rules(document)
+        context["event"]["message"] = _safe_text(context["event"]["message"])
+    except FileNotFoundError:
+        raise Http404("Event not found.")
+    except (OSError, ValueError, sqlite3.Error):
+        context["storage_error"] = True
+        return render(request, "receiver/investigate.html", context, status=503)
+    return render(request, "receiver/investigate.html", context)
 
 
 class HeartbeatSerializer(serializers.Serializer):

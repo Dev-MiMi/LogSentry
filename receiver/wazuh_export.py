@@ -17,6 +17,7 @@ import stat
 from xml.etree.ElementTree import Element, SubElement, indent, tostring
 
 from .storage import check_private, open_inbox
+from .wazuh_fields import ssh_fields
 
 
 MAX_EXPORT_BYTES = 128 * 1024 * 1024
@@ -47,7 +48,7 @@ class ExportError(Exception):
     pass
 
 
-def event_document(row):
+def event_document(row, *, enriched=True):
     payload = json.loads(row["payload"])
     # Field names/transport provenance are controlled here, not copied from
     # arbitrary JSON. Original timestamps and unaltered message stay distinct.
@@ -56,6 +57,11 @@ def event_document(row):
     )}
     event.update(schema_version=1, record_id=row["id"], collector_id=row["collector_id"],
                  received_at=row["received_at"], payload_sha256=row["payload_hash"])
+    if enriched:
+        event["enrichment_version"] = 1
+        ssh = ssh_fields(event)
+        if ssh:
+            event["ssh"] = ssh
     return {"integration": "logsentry", "logsentry": event}
 
 
@@ -291,7 +297,8 @@ delivery acknowledgement, or authorization to delete any local evidence.
             row = source.execute("SELECT * FROM events WHERE id=?", (record_id,)).fetchone()
         if row is None:
             raise ExportError("Record is no longer in the inbox; cannot verify its evidence.")
-        expected = event_document(row)
+        # Existing milestone 3 exports are immutable and remain verifiable.
+        expected = (event_document(row), event_document(row, enriched=False))
         fd = os.open(archive, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         matched = False
         with os.fdopen(fd, "rb") as stream:
@@ -314,7 +321,7 @@ delivery acknowledgement, or authorization to delete any local evidence.
                     if not isinstance(observed.get("manager"), dict) or not observed["manager"].get("name"):
                         continue
                     full_log = observed.get("full_log")
-                    if isinstance(full_log, str) and json.loads(full_log) == expected:
+                    if isinstance(full_log, str) and json.loads(full_log) in expected:
                         matched = True
                         break
                 except (ValueError, AttributeError, RecursionError):

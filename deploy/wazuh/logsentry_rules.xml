@@ -1,0 +1,72 @@
+<!-- Local rule IDs 110000-110099. Built-in JSON decoder; no custom decoder.
+     Wazuh frequency windows use manager processing time, not occurred_at.
+     Activity (level 3) is searchable context, not a suspected incident.
+     Review existing active-response rules before installing new alert groups. -->
+<group name="logsentry,">
+  <rule id="110000" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="integration" type="pcre2">^logsentry$</field>
+    <field name="logsentry.schema_version" type="pcre2">^1$</field>
+    <field name="logsentry.collector_id" type="pcre2">^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$</field>
+    <field name="logsentry.event_id" type="pcre2">^[0-9a-f-]{36}$</field>
+    <description>LogSentry activity: $(logsentry.event_type) from $(logsentry.source) (collector $(logsentry.collector_id)).</description>
+  </rule>
+  <rule id="110001" level="3">
+    <if_sid>110000</if_sid>
+    <field name="logsentry.event_type" type="pcre2">^package_activity$</field>
+    <description>LogSentry package activity from $(logsentry.source) (collector $(logsentry.collector_id)).</description>
+    <group>logsentry_activity,</group>
+  </rule>
+  <rule id="110010" level="5">
+    <if_sid>110000</if_sid>
+    <field name="logsentry.enrichment_version" type="pcre2">^1$</field>
+    <field name="logsentry.ssh.kind" type="pcre2">^failed_login$</field>
+    <description>LogSentry SSH authentication failed for $(logsentry.ssh.username) from $(logsentry.ssh.source_ip) on $(logsentry.ssh.hostname).</description>
+    <group>logsentry_security,logsentry_ssh_failure,</group>
+  </rule>
+  <rule id="110011" level="5">
+    <if_sid>110000</if_sid>
+    <field name="logsentry.enrichment_version" type="pcre2">^1$</field>
+    <field name="logsentry.ssh.kind" type="pcre2">^invalid_user$</field>
+    <description>LogSentry SSH unknown account $(logsentry.ssh.username) from $(logsentry.ssh.source_ip).</description>
+    <group>logsentry_security,logsentry_invalid_user,</group>
+  </rule>
+  <rule id="110012" level="3">
+    <if_sid>110000</if_sid>
+    <field name="logsentry.enrichment_version" type="pcre2">^1$</field>
+    <field name="logsentry.ssh.kind" type="pcre2">^successful_login$</field>
+    <description>LogSentry SSH login succeeded for $(logsentry.ssh.username) from $(logsentry.ssh.source_ip).</description>
+    <group>logsentry_login_success,</group>
+  </rule>
+  <rule id="110013" level="7">
+    <if_sid>110012</if_sid>
+    <field name="logsentry.ssh.username" type="pcre2">^root$</field>
+    <description>LogSentry privileged SSH login: root from $(logsentry.ssh.source_ip). Verify authorization.</description>
+    <group>logsentry_security,logsentry_privileged_login,</group>
+  </rule>
+  <rule id="110020" level="8" frequency="3" timeframe="300">
+    <if_sid>110010</if_sid>
+    <if_matched_sid>110010</if_matched_sid>
+    <same_field>logsentry.ssh.source_key</same_field>
+    <different_field>logsentry.event_id</different_field>
+    <description>LogSentry repeated SSH failures from $(logsentry.ssh.source_ip): 3 matching deliveries within 300 seconds. Check original event times.</description>
+    <group>logsentry_security,logsentry_repeated_failures,</group>
+  </rule>
+  <rule id="110021" level="10" frequency="5" timeframe="300">
+    <if_sid>110010</if_sid>
+    <if_matched_sid>110010</if_matched_sid>
+    <same_field>logsentry.ssh.source_key</same_field>
+    <different_field>logsentry.event_id</different_field>
+    <description>LogSentry possible SSH brute force from $(logsentry.ssh.source_ip): 5 matching deliveries within 300 seconds. Check backlog and replay before escalation.</description>
+    <mitre><id>T1110</id></mitre>
+    <group>logsentry_security,logsentry_bruteforce,</group>
+  </rule>
+  <rule id="110022" level="12" frequency="4" timeframe="600">
+    <if_sid>110012</if_sid>
+    <if_matched_sid>110010</if_matched_sid>
+    <same_field>logsentry.ssh.account_key</same_field>
+    <description>LogSentry SSH success after at least 3 failed deliveries for $(logsentry.ssh.username) from $(logsentry.ssh.source_ip). Investigate possible compromise; check original event order.</description>
+    <mitre><id>T1078</id></mitre>
+    <group>logsentry_security,logsentry_success_after_failures,</group>
+  </rule>
+</group>
