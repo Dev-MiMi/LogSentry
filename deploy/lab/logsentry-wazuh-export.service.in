@@ -1,0 +1,20 @@
+[Unit]
+Description=LogSentry continuous JSON export to Wazuh
+PartOf=logsentry-lab.target
+Requires=wazuh-manager.service
+After=wazuh-manager.service
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@ROOT@
+EnvironmentFile=/etc/logsentry-lab/web.env
+ExecStart=@ROOT@/.venv/bin/python manage.py export_wazuh --watch
+Restart=always
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=@ROOT@/runtime

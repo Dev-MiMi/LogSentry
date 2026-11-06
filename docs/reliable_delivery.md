@@ -117,9 +117,11 @@ The manual sender is still available for inspection and small deliveries.
 
 ## Deploy on the Ubuntu 26.04 PC
 
-The PC was off during implementation; these deployment steps have not been run
-on it. First start it and choose a hostname/IP for the receiver. SSH is convenient
-for remote administration but local terminal setup works too.
+The PC now has a [verified local testing deployment](local_wazuh_lab.md) using
+the existing checkout and owner. The steps below describe the separate
+dedicated-account `/opt/logsentry` deployment for broader use; they were not
+substituted for the local lab. Choose a hostname/IP for that receiver. SSH is
+convenient for remote administration but local terminal setup works too.
 
 Install `python3-venv`, `nginx`, `openssl`, and Git using Ubuntu's package manager.
 Copy/clone the project to `/opt/logsentry` and create a dedicated unprivileged
@@ -206,5 +208,7 @@ restarts, lost acknowledgements, revoked credentials, browser login/CSRF, and
 TLS certificate/hostname rejection. A temporary Nginx 1.26.3 + Gunicorn 26.2.0
 deployment also verified HTTPS login, secure cookies and actual-record delivery
 with the supplied proxy configuration. The systemd units passed validation
-after substituting this workspace's executable paths. The PC's own certificates,
-service installation and networking must still be verified during deployment.
+after substituting this workspace's executable paths. The PC's local HTTPS
+certificates, managed services, queue recovery and exact manager receipt were
+subsequently verified as documented in [the local lab guide](local_wazuh_lab.md).
+Remote networking and the dedicated-account deployment need their own checks.

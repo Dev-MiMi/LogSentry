@@ -268,7 +268,8 @@ class ReceiverTests(TestCase):
             "message": "Accepted publickey for alice from 127.0.0.1 port 12345 ssh2",
         }) + "\n")
         with open_store(self.collection) as db:
-            source_id = register_source(db, Source("local-ssh", path, "sshd_capture", 2026))
+            source_id = register_source(db, Source(
+                "local-ssh", path, "sshd_capture", 2026, hostname="localhost"))
             collect_source(db, source_id)
         batch, _ = collected_batch(self.collection, read_credentials(self.credentials), "local-ssh")
         self.assertEqual(batch["events"][0]["observed_at"], "2026-11-04T09:00:00+00:00")

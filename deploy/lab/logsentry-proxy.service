@@ -1,0 +1,21 @@
+[Unit]
+Description=LogSentry local HTTPS and static files
+PartOf=logsentry-lab.target
+Requires=logsentry-web.service
+After=logsentry-web.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/nginx -t -c /etc/logsentry-lab/nginx.conf
+ExecStart=/usr/sbin/nginx -c /etc/logsentry-lab/nginx.conf -g "daemon off;"
+ExecReload=/bin/kill -HUP $MAINPID
+KillSignal=SIGQUIT
+TimeoutStopSec=10
+Restart=always
+RestartSec=5
+RuntimeDirectory=logsentry-proxy
+UMask=0027
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run/logsentry-proxy /var/log/nginx /var/lib/nginx

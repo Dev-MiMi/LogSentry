@@ -14,17 +14,24 @@ configure that agent's localfile reader instead. Do not install an agent on the
 manager host just for this handoff, and do not monitor the same file twice.
 The manager does not read files directly from a different machine's Termux storage.
 
-## What is implemented and what remains
+## Status and scope
+
+**Milestone 3 is complete for the Ubuntu PC's local testing lab**, verified on
+6 November 2026. See [the deployment record](local_wazuh_lab.md) for managed
+service commands, exact-record evidence and recovery checks. The instructions
+below describe manual deployment and deployment to another host; the configured
+local lab already runs an exporter service.
 
 - Real-event JSON export with saved offsets and interruption recovery.
 - A Wazuh `<localfile>` configuration and Linux service for continuous export.
 - Dashboard/CLI export counts, errors and pending records.
 - A command to match one exported event against a supplied Wazuh manager archive.
 
-Exporting locally is **not a manager acknowledgement**. This project has no live
-connection to your installed manager until you apply the configuration on the PC.
-Manager arrival must still be checked there. Custom threat-detection rules and
-alert dashboards are milestone 4; Android app collection remains milestone 6.
+Exporting locally is **not a manager acknowledgement**. Exact manager arrival was
+verified separately on the configured PC. A different deployment still requires
+its own file-reader configuration and receipt checks. Custom threat-detection
+rules and alert dashboards are milestone 4; Android app collection remains
+milestone 6.
 
 ## First configure Wazuh on the receiver host
 
@@ -230,8 +237,9 @@ python manage.py test receiver dashboard -v 1
 
 Tests exercise exact evidence, bounded batches, restart recovery at several write
 stages, file replacement/truncation, capacity failures, archive matching and the
-authenticated dashboard. They use temporary evidence only. Applying Wazuh's
-configuration and validating manager arrival on your PC remain deployment checks.
+authenticated dashboard. They use temporary evidence only. The local PC's
+configuration and manager arrival were additionally verified through the
+[live deployment checks](local_wazuh_lab.md); repeat those on other hosts.
 
 Official references used for this integration:
 

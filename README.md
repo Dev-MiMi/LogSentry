@@ -13,6 +13,10 @@ are needed for the engine. The dashboard uses Django 5.2 LTS, installed in
 
 ## Open the web dashboard
 
+On the configured Ubuntu/Wazuh PC, use the [managed local lab](docs/local_wazuh_lab.md)
+at `https://127.0.0.1:8444/receiver/`. The development-server instructions below
+apply when the managed lab is stopped or on another installation.
+
 ```bash
 cd /root/LogSentry
 source .venv/bin/activate
@@ -90,10 +94,14 @@ as JSON lines to `runtime/wazuh/events.jsonl`, with a recoverable checkpoint.
 The inbox shows export progress separately from manager verification. Run
 `python manage.py wazuh_status` for command-line status.
 
-Local export is implemented; receipt by your installed manager must be verified
-on the PC. See [Wazuh setup and verification](docs/wazuh_integration.md) for service
-configuration, archive matching, read permissions, and storage/replay limits.
-Custom Wazuh detection rules remain milestone 4; Android collection stays at 6.
+Milestone 3 is complete for the Ubuntu PC's local testing lab: managed HTTPS
+receipt, continuous export, exact manager receipt and process recovery were
+verified on 6 November 2026. Use [the local lab guide](docs/local_wazuh_lab.md)
+for start/stop commands, access and verification evidence. The commands above
+are for manual deployments; do not start a second exporter while its lab service runs.
+See [Wazuh setup and verification](docs/wazuh_integration.md) for other hosts and
+storage/replay limits. [Roadmap](docs/roadmap.md): milestones 1–3 complete for the
+local lab; custom Wazuh rules are milestone 4, hardening 5 and Android collection 6.
 
 ## Collect local Ubuntu/Termux logs
 

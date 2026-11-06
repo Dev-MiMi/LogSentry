@@ -1,0 +1,5 @@
+[Unit]
+Description=LogSentry local Wazuh testing lab
+Requires=wazuh-indexer.service wazuh-manager.service filebeat.service wazuh-dashboard.service
+Requires=logsentry-web.service logsentry-proxy.service logsentry-collector.service logsentry-forwarder.service logsentry-wazuh-export.service
+After=wazuh-indexer.service wazuh-manager.service filebeat.service wazuh-dashboard.service

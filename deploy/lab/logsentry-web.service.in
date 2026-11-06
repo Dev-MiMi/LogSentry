@@ -1,0 +1,19 @@
+[Unit]
+Description=LogSentry local authenticated event receiver
+PartOf=logsentry-lab.target
+After=network.target
+
+[Service]
+User=@USER@
+Group=@GROUP@
+WorkingDirectory=@ROOT@
+EnvironmentFile=/etc/logsentry-lab/web.env
+ExecStart=@ROOT@/.venv/bin/gunicorn logsentry_web.wsgi:application --bind 127.0.0.1:8000 --workers 1 --threads 2 --timeout 30 --access-logfile -
+Restart=always
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=@ROOT@/runtime
