@@ -77,6 +77,9 @@ class WazuhFieldsTests(UnitTestCase):
         for key in ("110020", "110021"):
             self.assertEqual(rules[key].findtext("same_field"), "logsentry.ssh.source_key")
             self.assertEqual(rules[key].findtext("different_field"), "logsentry.event_id")
+            self.assertIn("logsentry_ssh_failure,", rules[key].findtext("group"))
+        for key in ("110020", "110021", "110022"):
+            self.assertEqual(rules[key].findtext("if_matched_group"), "logsentry_ssh_failure")
         self.assertEqual(rules["110022"].findtext("same_field"), "logsentry.ssh.account_key")
 
     def test_logtest_runner_rejects_missing_phases_and_errors(self):
@@ -89,6 +92,14 @@ class WazuhFieldsTests(UnitTestCase):
         with patch("deploy.wazuh.test_rules.subprocess.run", return_value=CompletedProcess([], 0, good, "ERROR loading rules")):
             with self.assertRaises(RuntimeError):
                 run_scenario("unused", [document()], ["110010"])
+        legacy = good.replace(" id:", " Rule id:").replace(" level:", " Level:")
+        info = "2026/11/06 20:00:00 wazuh-testrule: INFO: rule_tree_memory_warning set\n"
+        with patch("deploy.wazuh.test_rules.subprocess.run", return_value=CompletedProcess([], 0, legacy, info)):
+            run_scenario("unused", [document()], ["110010"])
+        for diagnostic in ("WARNING: skipped rule", "2026/11/06 20:00:00 wazuh-testrule: ERROR: bad rule"):
+            with patch("deploy.wazuh.test_rules.subprocess.run", return_value=CompletedProcess([], 0, good, diagnostic)):
+                with self.assertRaises(RuntimeError):
+                    run_scenario("unused", [document()], ["110010"])
         self.assertGreaterEqual(len(list(scenarios())), 20)
 
 

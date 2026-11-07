@@ -100,16 +100,18 @@ verified on 6 November 2026. Use [the local lab guide](docs/local_wazuh_lab.md)
 for start/stop commands, access and verification evidence. The commands above
 are for manual deployments; do not start a second exporter while its lab service runs.
 See [Wazuh setup and verification](docs/wazuh_integration.md) for other hosts and
-storage/replay limits. [Roadmap](docs/roadmap.md): milestones 1–3 complete for the
-local lab; custom Wazuh rules are milestone 4, hardening 5 and Android collection 6.
+storage/replay limits. [Roadmap](docs/roadmap.md): milestones 1–4 complete for the
+local lab; hardening is milestone 5 and Android collection is milestone 6.
 
 Milestone 4 now includes [Wazuh rules and investigation tools](docs/wazuh_detection.md).
 It indexes routine activity at informational level and detects recognized SSH
 failures, repeated failures, possible brute force and successes after failures.
-Open an inbox record to inspect its evidence and copy its Wazuh search. Rules
-must be installed and verified on the manager PC before dashboard alerting is
-considered complete; the guide includes isolated Wazuh scenarios and an exact
-`verify_wazuh_alert` command.
+The rules are active on the Ubuntu lab: all 20 Wazuh scenarios passed, and exact
+real package and SSH login events were verified in the manager and dashboard's
+index. Open an inbox record to inspect its evidence and copy its Wazuh search,
+or use **Discover → Open → LogSentry — All events** in Wazuh with the appropriate
+time range. The guide includes installation steps for other hosts, isolated
+Wazuh scenarios and the exact `verify_wazuh_alert` command.
 
 ## Collect local Ubuntu/Termux logs
 

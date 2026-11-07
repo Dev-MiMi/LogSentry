@@ -4,6 +4,8 @@
 Run on the Wazuh manager after installing logsentry_rules.xml:
     sudo .venv/bin/python deploy/wazuh/test_rules.py
 Each scenario has a fresh logtest session; events within it share history.
+Before restarting the live manager, use --logtest with wazuh-logtest-legacy
+to test the candidate configuration directly from disk.
 """
 
 import argparse
@@ -77,11 +79,15 @@ def run_scenario(binary, documents, expected):
     phases = re.split(r"\*\*Phase 3: Completed filtering \(rules\)\.", output)[1:]
     found = []
     for phase in phases:
-        rule = re.search(r"\bid:\s*'?(\d+)'?", phase)
-        level = re.search(r"\blevel:\s*'?(\d+)'?", phase)
+        rule = re.search(r"^\s*(?:Rule )?id:\s*'?(\d+)'?", phase, re.I | re.M)
+        level = re.search(r"^\s*level:\s*'?(\d+)'?", phase, re.I | re.M)
         found.append((rule[1] if rule else None, int(level[1]) if level else None))
     wanted = [(key, RULES[key][0]) for key in expected]
-    if result.returncode or found != wanted or re.search(r"ERROR|WARNING|Wazuh-logtest error", output, re.I):
+    # Match diagnostics, not the INFO setting "rule_tree_memory_warning".
+    diagnostic = re.search(
+        r"^(?:\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2} [\w.-]+:\s*)?"
+        r"(?:ERROR|WARNING)\b|^Wazuh-logtest error", output, re.I | re.M)
+    if result.returncode or found != wanted or diagnostic:
         raise RuntimeError(f"Expected {wanted}, got {found}.\n{output[-8000:]}")
 
 

@@ -51,7 +51,10 @@ and subdomain flags are intentionally unset for this local IP deployment.
 
 The ninth service, `logsentry-proxy`, provides local HTTPS and static files.
 The collector reads registered sources; the current forwarder selects
-`ubuntu-dpkg`. No Android collector or SSH threat rule was created by deployment.
+`ubuntu-dpkg` and `local-ssh`. Milestone 4 subsequently installed SSH threat rules
+and verified a real local key login. The SSH capture is started on demand with
+`python3 -m logsentry.ssh_capture serve`; it is separate from the nine services
+and was stopped after acceptance. No Android collector is connected.
 Package events are context, not invented attacks.
 
 The deployment templates are in `deploy/lab/`. `.service.in` files use `@ROOT@`,
@@ -103,8 +106,11 @@ databases remain Git-ignored. The Wazuh configuration backup for this stage is
 
 Full JSON archiving was enabled only for the receipt verification window and
 restored to **off** afterward. Archive indexing remains disabled. The normal
-Wazuh alerts dashboard does not display every exported package event; milestone 4
-adds appropriate rules and investigation views.
+Wazuh alerts dashboard did not display those historical package events.
+[Milestone 4](wazuh_detection.md) now indexes new LogSentry activity through the
+normal alerts pipeline and provides three saved Discover searches. The old 286
+events were preserved without replay. Package activity and ordinary successful
+logins are informational, while matching SSH security rules raise findings.
 
 ## Inspect operation
 

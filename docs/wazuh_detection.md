@@ -1,32 +1,56 @@
 # Milestone 4: Wazuh rules and investigations
 
-Implemented in this checkout: searchable activity, SSH rule fields, nine Wazuh
-rules, severity mapping, authenticated evidence pages and exact alert verification.
-The Ubuntu PC still needs the installation and live dashboard checks below.
-Do not mark this milestone fully complete on code tests alone.
+**Complete for the local Ubuntu lab on 6 November 2026.** Nine custom rules,
+severity mapping, authenticated investigation pages and exact alert verification
+are active. Individual events are searchable in Wazuh's alerts index.
 
-## PC handoff status
+## Verified on the PC
 
-The phone session completed these checks before handoff:
+- Wazuh 4.14.10 configuration validation passed. All 20 isolated scenarios passed
+  in both standalone logtest and the active manager's logtest sessions, including
+  three/five-failure boundaries, replay, identity separation and root success
+  after failures.
+- Fixed correlation to use the final failure **group**, since an event promoted
+  to rule 110020 no longer has final rule ID 110010. Without this fix, the fifth
+  failure and success-after-three-failures alerts were missed. Both elevated
+  failure rules retain `logsentry_ssh_failure`; successes and invalid-user
+  messages do not enter that history.
+- Exact real package record **319** matched rule **110001**, level **3**. Exact
+  real localhost SSH login record **325** matched rule **110012**, level **3**.
+  Both were checked against `alerts.json`, the original event contents and
+  `wazuh-alerts-4.x-2026.11.06`, with one indexed match per collector/event pair.
+  Queries through the authenticated dashboard API returned those same records.
+- Three Discover searches were saved: **LogSentry — All events**,
+  **LogSentry — Routine activity**, and **LogSentry — Security findings**.
+  Dashboard timezone is `Africa/Lagos`. Browser rendering was not inspected;
+  saved objects and dashboard search responses were verified through its API.
+- The original 286 export records, inode and byte prefix were preserved.
+  At acceptance there were 330 unique exports, 44 indexed new LogSentry events,
+  no pending deliveries and no exporter errors. The indexer cluster was green.
+  Full archive output and archive indexing remain off.
+- All 78 receiver/dashboard tests passed. The engine/collector suite ran 148
+  tests with its optional SSH test skipped; that test was then run separately
+  with the real OpenSSH dependency (11/11 SSH tests passed). All seven dashboard
+  JavaScript cases also passed.
+- After starting the lab again on 7 November, dashboard and indexer health were
+  green, all nine services were active, and the saved searches persisted.
+  Authenticated package/SSH investigation pages and the rule catalogue returned
+  the expected evidence with `no-store`; login and API access checks passed.
 
-- 78 receiver/dashboard tests passed, including 9 new milestone 4 tests.
-- 148 engine/collector tests ran successfully, with 1 optional SSH test skipped.
-- All 7 dashboard JavaScript tests passed.
-- `git diff --check` passed.
+Private evidence is in `runtime/milestone4/acceptance.json`, the two exact alert
+copies, logtest results and `dashboard-views.json`. No test-only attack records
+were inserted into the live pipeline. Security correlation behavior was checked
+in isolated logtest; live acceptance used actual package work and a successful
+key login, not a simulated compromise.
 
-**Actual Wazuh engine validation has not completed.** An isolated offline test
-setup on the phone was interrupted; no passing Wazuh result is claimed. Start
-with the configuration check and `deploy/wazuh/test_rules.py` on the Ubuntu PC.
-In particular, confirm correlation threshold counts and precedence for a root
-success after failures. Fix any discrepancies before activating the rules.
-The Python tests validate enrichment, evidence boundaries and test-runner parsing;
-they do not replace running Wazuh's rule engine.
-
-No PC configuration, service or dashboard setting was changed by this phone
-implementation. The next session should read this guide and `docs/local_wazuh_lab.md`,
-inspect the running PC lab, perform the remaining checks, then update the roadmap
-with actual results. Preserve the existing export file and checkpoint. Synthetic
-scenarios belong only in Wazuh logtest; use real new events for live acceptance.
+The forwarder now selects `ubuntu-dpkg` and `local-ssh`. OpenSSH was installed
+for the existing capture feature; the system SSH service and socket are disabled.
+The dedicated capture listens only on `127.0.0.1:2222`, allows the existing `user`
+account's dedicated key, and exits each login through `/usr/bin/true`. It was
+stopped after verification and runs **on demand**, separately from the nine lab
+services. Start it with `python3 -m logsentry.ssh_capture serve` and use the login
+command it prints. See [SSH collection](ssh_collection.md). The forwarding source
+remains registered; starting capture produces new real events automatically.
 
 ## What changes
 
@@ -114,10 +138,11 @@ The commands below are for `/home/user/LogSentry`; use your actual checkout path
 3. Run the isolated rule scenarios before activating the change:
 
    ```bash
-   sudo .venv/bin/python deploy/wazuh/test_rules.py
+   sudo .venv/bin/python deploy/wazuh/test_rules.py --logtest /var/ossec/bin/wazuh-logtest-legacy
    ```
 
-   This uses Wazuh's ruleset test sessions. Its artificial cases never enter the
+   The standalone binary reads the candidate configuration from disk without
+   requiring a live manager restart. Its artificial cases never enter the
    receiver, the export file, or the real alerts dashboard. It checks final IDs
    and levels, threshold boundaries, separated identities, replay, root success
    precedence and unrelated-app text. All scenarios must pass on your Wazuh
@@ -129,6 +154,7 @@ The commands below are for `/home/user/LogSentry`; use your actual checkout path
    sudo systemctl restart wazuh-manager
    sudo systemctl start logsentry-lab.target
    sudo systemctl restart logsentry-web logsentry-wazuh-export
+   sudo .venv/bin/python deploy/wazuh/test_rules.py
    bash deploy/lab/lab.sh status
    ```
 
@@ -138,7 +164,8 @@ The commands below are for `/home/user/LogSentry`; use your actual checkout path
 
 ## Verify a real event and dashboard visibility
 
-The PC currently forwards `ubuntu-dpkg`. Allow the next actual package operation
+The PC currently forwards `ubuntu-dpkg` and the on-demand `local-ssh` source.
+Allow the next actual package operation
 you intended to perform to generate a new record. A normal package record is
 enough to verify activity indexing. SSH findings require a real registered SSH
 source to be selected by the forwarder; a package log cannot produce SSH alerts.
@@ -184,6 +211,13 @@ for `rule.description`, `rule.level`, `data.logsentry.collector_id`,
 `data.logsentry.source`, `data.logsentry.ssh.source_ip` and
 `data.logsentry.ssh.username`. Set the dashboard's `dateFormat:tz` setting to
 `Africa/Lagos` for Nigeria time. LogSentry already uses WAT.
+
+On this PC the three searches are already available in **Discover → Open**.
+The reusable saved objects are in `deploy/wazuh/logsentry-searches.ndjson` for
+import through **Dashboard management → Saved objects → Import** on another lab
+with the existing `wazuh-alerts-*` index pattern. Use a time range containing the
+events (for example **Today** on the acceptance date). The security search can
+be empty when there are no security findings; ordinary activity is level 3.
 
 If a verified manager alert is missing from the dashboard, inspect Filebeat and
 the indexer, the alerts module, index permissions and the time range. Do not
