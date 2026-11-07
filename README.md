@@ -1,10 +1,21 @@
 # LogSentry
 
-A Python security log analyzer focused on Ubuntu SSH authentication. The engine
-reads log files, detects suspicious patterns, assigns priorities, and generates
-investigation reports. It includes a CLI, a local Django dashboard, and an
-incremental collector for accessible Ubuntu/Termux log files.
-An authenticated web inbox starts the next phase toward Wazuh integration.
+LogSentry's current goal is to collect security-related events and crash logs
+from various mobile apps installed on phones, securely forward those events to
+Wazuh, and provide a web interface for reviewing evidence and investigations.
+App-specific event collection depends on the sources each app makes available
+and the permissions granted by the phone's operating system.
+
+LogSentry remains a web app until the user explicitly requests otherwise.
+A dedicated mobile app is reserved for the final milestone.
+
+The implemented foundation includes a Python file collector, authenticated
+Django receiver, durable forwarding queue, Wazuh exporter and SSH detection
+rules. The phone-to-PC pipeline has been verified with accessible Termux package
+logs and Debian/proot SSH records. These checks establish delivery and current
+rule behavior; collection of the intended mobile-app security and crash events
+still needs its own source integrations and verification. General package/SSH
+logs are supporting test sources, not the project's complete collection goal.
 
 Requires Python 3.10+ and system timezone data. No third-party Python packages
 are needed for the engine. The dashboard uses Django 5.2 LTS, installed in
@@ -112,6 +123,13 @@ index. Open an inbox record to inspect its evidence and copy its Wazuh search,
 or use **Discover → Open → LogSentry — All events** in Wazuh with the appropriate
 time range. The guide includes installation steps for other hosts, isolated
 Wazuh scenarios and the exact `verify_wazuh_alert` command.
+
+The [phone-to-PC LAN deployment](docs/phone_to_pc.md) is also configured and
+verified: the phone's existing Termux/Debian collector forwards accessible logs
+over trusted HTTPS under its own `termux-phone` identity. Use the saved Wazuh
+search **LogSentry — Phone events**. Mobile-app security and crash source coverage
+remains to be implemented and verified. The dedicated mobile app is the final
+milestone and starts only when explicitly requested.
 
 ## Collect local Ubuntu/Termux logs
 

@@ -57,6 +57,13 @@ and verified a real local key login. The SSH capture is started on demand with
 and was stopped after acceptance. No Android collector is connected.
 Package events are context, not invented attacks.
 
+The [phone-to-PC deployment](phone_to_pc.md) now adds a separate LAN HTTPS
+collector API at `https://192.168.139.101:8444/api/v1/events/`. The phone forwards
+accessible Termux and Debian/proot SSH records as `termux-phone`; use Wazuh's
+**LogSentry — Phone events** saved search. The localhost browser interface and
+Wazuh listeners stay local. Network addresses are DHCP-assigned and must match
+the certificate and forwarding configuration.
+
 The deployment templates are in `deploy/lab/`. `.service.in` files use `@ROOT@`,
 `@USER@` and `@GROUP@` placeholders; the installed copies have those substituted.
 Configuration is in `/etc/logsentry-lab/`; static assets are copied to
